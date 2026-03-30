@@ -1,0 +1,42 @@
+#!/bin/bash
+cat << 'PYEOF' > /home/admin/shim_test.py
+import http.server
+import socketserver
+import urllib.request
+import os
+
+PORT = 80
+# Proxy points to the Kubernetes Control Plane Node on the Shim Pod's NodePort egress listener
+os.environ["http_proxy"] = "http://${cp_node_ip}:31280"
+os.environ["https_proxy"] = "http://${cp_node_ip}:31280"
+
+class ShimHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        try:
+            # Use httpbin to test the forward proxy works for standard egress
+            req = urllib.request.Request("http://httpbin.org/get")
+            with urllib.request.urlopen(req) as response:
+                status = response.getcode()
+            
+            # Send success response to the client
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(f'{{"message": "Successfully hit httpbin via proxy", "httpbin_status": {status}}}\n'.encode('utf-8'))
+            print("Successfully handled GET request and proxy hit.", flush=True)
+        except Exception as e:
+            # Send error response if proxy fails
+            self.send_response(500)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(f'{{"error": "Failed to hit httpbin via proxy", "details": "{str(e)}" }}\n'.encode('utf-8'))
+            print("Error handling GET request:", str(e), flush=True)
+
+with socketserver.TCPServer(("", PORT), ShimHandler) as httpd:
+    print("Serving inbound traffic on port", PORT, flush=True)
+    httpd.serve_forever()
+PYEOF
+
+chmod +x /home/admin/shim_test.py
+# Run it in the background as root (since it binds to port 80)
+nohup python3 /home/admin/shim_test.py > /var/log/shim_test.log 2>&1 &
