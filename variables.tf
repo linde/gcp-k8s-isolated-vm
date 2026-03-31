@@ -1,3 +1,6 @@
+
+## input variables
+
 variable "gcp_project" {
   type        = string
   description = "The GCP project ID to deploy into."
@@ -57,10 +60,22 @@ variable "worker_node_count" {
 variable "inbound_node_port" {
   type        = number
   default     = 30080
-  description = "The NodePort used for inbound traffic to the shim VM via the Envoy proxy."
+  description = "The NodePort used for inbound traffic to the proxied VM via the Envoy proxy."
 
   validation {
     condition     = var.inbound_node_port >= 30000 && var.inbound_node_port <= 32767
     error_message = "inbound_node_port must be between 30000 and 32767, which is the default NodePort range in Kubernetes."
   }
+}
+
+
+###  output variables
+
+output "control_plane_public_ip" {
+  value = google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip
+}
+
+output "ssh_key_path" {
+  value       = abspath(local_file.private_key.filename)
+  description = "Path to the generated SSH private key"
 }

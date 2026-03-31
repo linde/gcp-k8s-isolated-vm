@@ -156,6 +156,11 @@ EOF
   echo ">>> Kubernetes is already initialized."
 fi
 %{ else }
+# Configure NAT for Proxied VM egress
+echo ">>> Configuring NAT for Proxied VM (${proxied_vm_ip})..."
+ACTIVE_IFACE=$(ip route get 8.8.8.8 | grep -Po '(?<=dev )(\S+)')
+sudo iptables -t nat -I POSTROUTING 1 -s ${proxied_vm_ip}/32 -o $ACTIVE_IFACE -j MASQUERADE
+
 if [ ! -f /etc/kubernetes/kubelet.conf ]; then
   echo ">>> Joining Kubernetes cluster (with retries)..."
 

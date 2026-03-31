@@ -1,28 +1,29 @@
 #!/bin/bash
-cat << 'PYEOF' > /home/admin/shim_test.py
+cat << 'PYEOF' > /home/admin/proxied_test.py
 import http.server
 import socketserver
 import urllib.request
 import os
+import json
 
 PORT = 80
-# Proxy points to the Kubernetes Control Plane Node on the Shim Pod's NodePort egress listener
-os.environ["http_proxy"] = "http://${cp_node_ip}:31280"
-os.environ["https_proxy"] = "http://${cp_node_ip}:31280"
+# Egress is handled via VPC Layer 3 routing now, no proxy env vars needed.
 
-class ShimHandler(http.server.BaseHTTPRequestHandler):
+class ProxiedHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         try:
             # Use httpbin to test the forward proxy works for standard egress
-            req = urllib.request.Request("http://httpbin.org/get")
+            req = urllib.request.Request("http://httpbin.org/ip")
             with urllib.request.urlopen(req) as response:
                 status = response.getcode()
+                body = response.read().decode('utf-8')
+                origin_ip = json.loads(body).get("origin", "unknown")
             
             # Send success response to the client
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.end_headers()
-            self.wfile.write(f'{{"message": "Successfully hit httpbin via proxy", "httpbin_status": {status}}}\n'.encode('utf-8'))
+            self.wfile.write(f'{{"message": "Successfully hit httpbin via direct L3 routing", "origin_ip": "{origin_ip}", "httpbin_status": {status}}}\n'.encode('utf-8'))
             print("Successfully handled GET request and proxy hit.", flush=True)
         except Exception as e:
             # Send error response if proxy fails
@@ -32,11 +33,11 @@ class ShimHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(f'{{"error": "Failed to hit httpbin via proxy", "details": "{str(e)}" }}\n'.encode('utf-8'))
             print("Error handling GET request:", str(e), flush=True)
 
-with socketserver.TCPServer(("", PORT), ShimHandler) as httpd:
+with socketserver.TCPServer(("", PORT), ProxiedHandler) as httpd:
     print("Serving inbound traffic on port", PORT, flush=True)
     httpd.serve_forever()
 PYEOF
 
-chmod +x /home/admin/shim_test.py
+chmod +x /home/admin/proxied_test.py
 # Run it in the background as root (since it binds to port 80)
-nohup python3 /home/admin/shim_test.py > /var/log/shim_test.log 2>&1 &
+nohup python3 /home/admin/proxied_test.py > /var/log/proxied_test.log 2>&1 &

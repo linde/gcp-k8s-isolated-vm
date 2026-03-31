@@ -11,7 +11,7 @@
 
 To achieve a bidirectional bridge where the Pod proxies inbound traffic to the VM's Nginx server, and the VM routes its outbound egress traffic back through the Pod, we need a combination of a Reverse Proxy (for inbound) and a Forward Proxy or NAT Gateway (for outbound egress).
 
-Using Envoy as the shim pod allows us to configure:
+Using Envoy as the proxied pod allows us to configure:
 1. A **Reverse Proxy** listener on port 80 that forwards traffic to the VM's Internal IP.
 2. A **Forward Proxy** listener (e.g., HTTP CONNECT proxy on port 3128) deployed in the same Envoy configuration to handle egress from the VM.
 
@@ -28,17 +28,17 @@ To provision the VM alongside integerated infrastructure, add these resources to
    - Ensure the VM allows ingress on port 80 from the Pod CIDR (e.g. `192.168.0.0/16`) or the specific node IPs. (The existing `allow_internal_all` rule already covers this).
 
 ### Required Kubernetes Resources
-To deploy the Envoy shim pod, you will need:
+To deploy the Envoy proxied pod, you will need:
 
 1. **`ConfigMap` (Envoy Configuration)**:
    - Contains `envoy.yaml` defining two listeners:
      - **Ingress Listener (Port 80)**: Routes to the VM's internal IP.
      - **Egress/Forward Proxy Listener (Port 3128)**: Allows the VM to proxy outbound traffic to the internet.
-2. **`Deployment` (Shim Pod)**:
+2. **`Deployment` (Proxied Pod)**:
    - Runs the `envoyproxy/envoy` image.
    - Mounts the `ConfigMap` as `/etc/envoy/envoy.yaml`.
 3. **`Service` (LoadBalancer or NodePort)**:
-   - Exposes the Shim Pod's port 80 to the rest of the cluster or externally.
+   - Exposes the Proxied Pod's port 80 to the rest of the cluster or externally.
    - For egress, the VM will hit the Pod's IP or a dedicated internal NodePort/LoadBalancer on port 3128.
 
 ## Diagram
@@ -47,7 +47,7 @@ To deploy the Envoy shim pod, you will need:
 flowchart TD
     subgraph K8s Cluster
         SVC[Kubernetes Service\nExternal/Internal Endpoint]
-        subgraph Shim Pod
+        subgraph Proxied Pod
             Envoy[Envoy Proxy]
         end
     end
@@ -73,5 +73,5 @@ flowchart TD
 ```
 
 ## Interaction Flow
-1. **Inbound**: A client hits the Kubernetes Service which directs traffic to the Shim Pod (Envoy). Envoy acts as a reverse proxy and pipes the traffic to the VM's internal IP on port 80.
+1. **Inbound**: A client hits the Kubernetes Service which directs traffic to the Proxied Pod (Envoy). Envoy acts as a reverse proxy and pipes the traffic to the VM's internal IP on port 80.
 2. **Outbound / Egress**: When the VM needs to access the internet (e.g., downloading packages or calling an API), it uses the Envoy Pod as an HTTP proxy. The traffic goes from the VM -> Envoy Pod (Port 3128) -> Internet. This ensures all egress leaves via the cluster's nodes.

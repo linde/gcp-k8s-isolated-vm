@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: shim-envoy-config
+  name: proxied-envoy-config
 data:
   envoy.yaml: |
     static_resources:
@@ -66,7 +66,7 @@ data:
             - endpoint:
                 address:
                   socket_address:
-                    address: ${shim_vm_ip}
+                    address: ${proxied_vm_ip}
                     port_value: 80
 
       # Cluster providing dynamic forward proxy for VM egress
@@ -85,16 +85,16 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: shim-pod
+  name: proxied-pod
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: shim-pod
+      app: proxied-pod
   template:
     metadata:
       labels:
-        app: shim-pod
+        app: proxied-pod
     spec:
       containers:
       - name: envoy
@@ -108,17 +108,17 @@ spec:
       volumes:
       - name: config
         configMap:
-          name: shim-envoy-config
+          name: proxied-envoy-config
 
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: shim-svc
+  name: proxied-svc
 spec:
   type: NodePort
   selector:
-    app: shim-pod
+    app: proxied-pod
   ports:
   - name: inbound
     port: 80
