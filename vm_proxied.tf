@@ -50,9 +50,8 @@ resource "google_compute_route" "vm_to_proxied_egress" {
 }
 
 resource "local_file" "proxied_pod_manifest" {
-  filename = "${path.module}/.tmp/proxied-pod.yaml"
-  content = templatefile("${path.module}/scripts/proxied-pod.yaml.tftpl", {
+  filename = "${path.module}/.tmp/proxy-svc.yaml"
+  content = templatefile("${path.module}/scripts/proxy-svc.yaml.tftpl", {
     proxied_vm_ip     = google_compute_address.proxied_vm_ip.address
-    inbound_node_port = var.inbound_node_port
   })
 }

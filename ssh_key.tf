@@ -7,3 +7,4 @@ resource "local_file" "private_key" {
   filename        = "${path.module}/.tmp/vm_key"
   file_permission = "0600" # Crucial: SSH requires strict permissions on private keys
 }
+

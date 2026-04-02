@@ -1,19 +1,51 @@
-# Cloud K8s Scratch with Envoy Proxied Pod
+# Cloud K8s Scratch with LoadBalancer Routing
 
-This Terraform project provisions a Kubernetes cluster on GCP instances (using `kubeadm`), alongside an `e2-micro` VM that connects to the cluster via an Envoy proxied pod.
+This Terraform project provisions a Kubernetes cluster on GCP instances (using `kubeadm`), alongside an `e2-micro` VM that connects to the cluster via native Layer 3 routing. Ingress is managed via a Kubernetes `LoadBalancer` service.
 
 ## Architecture
 
-The system uses a hybrid approach for the Proxied VM:
-- **Inbound**: Traditional Kubernetes Ingress/NodePort -> Envoy Pod -> Proxied VM (Port 80)
+The system uses a pure Layer 3 approach for the Proxied VM, ensuring all its traffic (both inbound and outbound) is routed through the Kubernetes nodes:
+
+- **Inbound (Ingress)**: Kubernetes LoadBalancer Service -> GCP External Load Balancer -> K8s Endpoints -> Proxied VM (Layer 3 IP Routing)
 - **Outbound (Egress)**: Transparent Layer 3 VPC Routing (VM -> Worker Node NAT -> Internet)
 
-### Layer 3 VPC Routing Architecture Components and their contributions
+### VM Isolation and Traffic Flow
 
-- **Proxied VM**: Tagged with a specific via-node tag (e.g., `proxied-vm-via-node-1-xyz`), runs standard applications. No proxy environment variables are needed.
+The following diagram illustrates how the Proxied VM is isolated within the VPC and how all edge traffic is funneled through the Kubernetes node:
+
+```mermaid
+graph LR
+    Internet((Internet))
+
+    subgraph VPC [GCP VPC Network]
+        direction TB
+        GCP_LB[GCP External Load Balancer]
+        subgraph Subnet [k8s-subnet]
+            direction LR
+            K8s_Node[Kubernetes Worker Node]
+            Proxied_VM[Proxied VM]
+        end
+    end
+
+    %% Inbound Traffic
+    Internet -->|External IP| GCP_LB
+    GCP_LB -->|NodePort| K8s_Node
+    K8s_Node -->|Layer 3 DNAT| Proxied_VM
+
+    %% Cluster Internal Traffic
+    K8s_Node -->|Service/Endpoints| Proxied_VM
+
+    %% Outbound Traffic (Egress)
+    Proxied_VM -->|Egress Route| K8s_Node
+    K8s_Node -->|NAT Masquerade| Internet
+```
+
+### Layer 3 VPC Routing Architecture Components
+
+- **Proxied VM**: Tagged with a specific via-node tag, runs standard applications. No proxy environment variables are needed.
 - **GCP VPC Static Route**: Points `0.0.0.0/0` (internet egress) from tagged instances to the Worker Node as the next hop.
 - **Kubernetes Worker Node**: Acting as a transparent NAT gateway using standard `iptables` MASQUERADE rules.
-- **Envoy Pod**: Still handles inbound requests from the cluster to the Proxied VM.
+- **Kubernetes Service & Endpoints**: Routes cluster-internal or NodePort traffic directly to the VM's private IP.
 
 ## Getting Started
 
@@ -34,54 +66,62 @@ terraform init
 terraform apply
 ```
 
-### 2. Deploy the Proxied Pod
+### 2. Deploy Service and Endpoints
 
-Once the cluster is up and running, extract the Control Plane IP and fetch the `kubeconfig` to your local `.tmp` directory to interact with the cluster. *Note: The `terraform apply` step will generate `.tmp/proxied-pod.yaml` containing the K8s manifests configured with the VM's static IP.*
+Once the cluster is up and running, extract the Control Plane IP and fetch the `kubeconfig` to your local `.tmp` directory to interact with the cluster. *Note: The `terraform apply` step will generate `.tmp/proxy-svc.yaml` containing the K8s manifests configured with the VM's static IP.*
 
 ```bash
-
 export CP_IP=$(terraform output -raw control_plane_public_ip)
 export SSH_KEY=$(terraform output -raw ssh_key_path)
 export KUBECONFIG="$(pwd)/.tmp/kubeconfig.yaml"
 
 export SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${SSH_KEY}"
 
-# you can watch the control plane boot with:
-ssh ${SSH_OPTS} admin@${CP_IP} "sudo journalctl  -u google-startup-scripts.service -f " 
+
+# check the startup script on the control plane
+ssh ${SSH_OPTS} admin@${CP_IP} "sudo journalctl -u google-startup-scripts.service -f"
+# hit ctrl-c to break out when you see: google-startup-scripts.service: Consumed ...
 
 # then get a kubeconfig for the host:
 ssh ${SSH_OPTS} admin@${CP_IP} "sudo cat /etc/kubernetes/admin.conf" > ${KUBECONFIG}
 
-kubectl apply -f .tmp/proxied-pod.yaml
+# now deploy our service and endpoints to proxy to the vm
+kubectl apply -f .tmp/proxy-svc.yaml
 ```
 
 ### 3. Verify the Deployment
 
-Verify that the `proxied-pod` is running successfully:
+Verify that the `proxied-svc` is created with type `LoadBalancer` and wait for it to get an `EXTERNAL-IP` (this may take a minute as GCP provisions the load balancer):
 
 ```bash
-kubectl get pods
-kubectl get svc proxied-svc
+kubectl get svc proxied-svc -w
 ```
 
-### 4. Test the Bridge (Layer 3 Egress)
+Expect output similar to:
+```
+NAME          TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)        AGE
+proxied-svc   LoadBalancer   10.101.149.154   35.188.141.185   80:31234/TCP   1m
+```
 
-The `e2-micro` VM is running an inline Python script that serves HTTP requests on port `80`. When it receives a `GET` request, it synchronously tests direct internet egress by calling `httpbin.org/ip`.
+Also verify endpoints point to the VM IP:
+```bash
+kubectl get endpoints proxied-svc
+```
 
-To test the entire inbound/outbound flow, use `kubectl port-forward` to hit the service directly:
+### 4. Test the Bridge (Layer 3 Ingress & Egress)
 
-1. Start port-forwarding in the background (or in a separate terminal):
-   ```bash
-   kubectl port-forward svc/proxied-svc 8080:80 &
-   ```
-2. Send a request to the forwarded port:
-   ```bash
-   curl http://localhost:8080
-   ```
+The `e2-micro` VM is running an inline Python script that serves HTTP requests on port `80`. When it receives a request, it synchronously tests direct internet egress by calling `httpbin.org/ip`.
+
+Now that we have a LoadBalancer, you can test it directly from outside the cluster (e.g., from your local machine if firewalls allow, or from the control plane node):
+
+```bash
+export EXTERNAL_IP=$(kubectl get svc proxied-svc -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+curl http://$EXTERNAL_IP
+```
 
 **Expected output:**
-A successful JSON response indicating the Python script on the VM received your request AND successfully hits `httpbin.org/ip` transparently via Layer 3 routing! The `origin_ip` returned will be the public IP of the Kubernetes worker node (not the proxied VM's ephemeral/private IP).
+A successful JSON response indicating the Python script on the VM received your request AND successfully hits `httpbin.org/ip` transparently via Layer 3 routing!
 
 ```json
-{"message": "Successfully hit httpbin via direct L3 routing", "origin_ip": "34.135.217.180", "httpbin_status": 200}
+{"message": "Successfully hit httpbin via direct L3 routing", "origin_ip": "WORKER_PUBLIC_IP", "httpbin_status": 200}
 ```
