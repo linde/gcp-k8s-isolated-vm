@@ -10,13 +10,16 @@ spec:
     targetPort: 80
 
 ---
-apiVersion: v1
-kind: Endpoints
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
 metadata:
   name: proxied-svc
-subsets:
+  labels:
+    kubernetes.io/service-name: proxied-svc
+addressType: IPv4
+ports:
+  - name: inbound
+    port: 80
+endpoints:
   - addresses:
-      - ip: ${proxied_vm_ip}
-    ports:
-      - name: inbound
-        port: 80
+      - ${proxied_vm_ip}

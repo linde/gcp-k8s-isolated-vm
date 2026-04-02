@@ -1,12 +1,15 @@
-# Cloud K8s Scratch with LoadBalancer Routing
+# Scratchpad Example to Explore a K8s managed isolated VM
 
-This Terraform project provisions a Kubernetes cluster on GCP instances (using `kubeadm`), alongside an `e2-micro` VM that connects to the cluster via native Layer 3 routing. Ingress is managed via a Kubernetes `LoadBalancer` service.
+This project is a scratchpad to explore a K8s managed isolated VM. It is not intended for production use. 
+
+The idea is that you can use K8s to manage ingress and egress for a VM that is not part of the cluster. Currently we manage this VM via terraform along with the lifecycle of the cluster itself, but it is not a stretch to imagine that we could manage this VM via a K8s operator.
+
 
 ## Architecture
 
-The system uses a pure Layer 3 approach for the Proxied VM, ensuring all its traffic (both inbound and outbound) is routed through the Kubernetes nodes:
+In the example, we call this VM a "proxied VM" because it is proxied to the cluster via native Layer 3 routing. Ingress to it comes only via a Kubernetes LoadBalancer service; all egress is routed via GCP networking to the a node.
 
-- **Inbound (Ingress)**: Kubernetes LoadBalancer Service -> GCP External Load Balancer -> K8s Endpoints -> Proxied VM (Layer 3 IP Routing)
+- **Inbound (Ingress)**: Kubernetes LoadBalancer Service -> GCP External Load Balancer -> K8s EndpointSlice -> Proxied VM (Layer 3 IP Routing)
 - **Outbound (Egress)**: Transparent Layer 3 VPC Routing (VM -> Worker Node NAT -> Internet)
 
 ### VM Isolation and Traffic Flow
@@ -33,7 +36,7 @@ graph LR
     K8s_Node -->|Layer 3 DNAT| Proxied_VM
 
     %% Cluster Internal Traffic
-    K8s_Node -->|Service/Endpoints| Proxied_VM
+    K8s_Node -->|Service/EndpointSlice| Proxied_VM
 
     %% Outbound Traffic (Egress)
     Proxied_VM -->|Egress Route| K8s_Node
@@ -45,7 +48,7 @@ graph LR
 - **Proxied VM**: Tagged with a specific via-node tag, runs standard applications. No proxy environment variables are needed.
 - **GCP VPC Static Route**: Points `0.0.0.0/0` (internet egress) from tagged instances to the Worker Node as the next hop.
 - **Kubernetes Worker Node**: Acting as a transparent NAT gateway using standard `iptables` MASQUERADE rules.
-- **Kubernetes Service & Endpoints**: Routes cluster-internal or NodePort traffic directly to the VM's private IP.
+- **Kubernetes Service & EndpointSlice**: Routes cluster-internal or NodePort traffic directly to the VM's private IP.
 
 ## Getting Started
 
@@ -66,7 +69,7 @@ terraform init
 terraform apply
 ```
 
-### 2. Deploy Service and Endpoints
+### 2. Deploy Service and EndpointSlice
 
 Once the cluster is up and running, extract the Control Plane IP and fetch the `kubeconfig` to your local `.tmp` directory to interact with the cluster. *Note: The `terraform apply` step will generate `.tmp/proxy-svc.yaml` containing the K8s manifests configured with the VM's static IP.*
 
