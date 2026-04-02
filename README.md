@@ -75,11 +75,10 @@ Once the cluster is up and running, extract the Control Plane IP and fetch the `
 
 ```bash
 export CP_IP=$(terraform output -raw control_plane_public_ip)
-export SSH_KEY=$(terraform output -raw ssh_key_path)
 export KUBECONFIG="$(pwd)/.tmp/kubeconfig.yaml"
 
+export SSH_KEY=$(terraform output -raw ssh_key_path)
 export SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${SSH_KEY}"
-
 
 # check the startup script on the control plane
 ssh ${SSH_OPTS} admin@${CP_IP} "sudo journalctl -u google-startup-scripts.service -f"

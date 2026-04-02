@@ -46,6 +46,7 @@ resource "google_compute_firewall" "allow_management" {
   name    = "allow-management-${local.rand_suffix}"
   project = var.gcp_project
   network = google_compute_network.k8s.id
+  target_tags = ["k8s-cp"]
 
   allow {
     protocol = "tcp"

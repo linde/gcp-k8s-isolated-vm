@@ -5,7 +5,7 @@ resource "google_compute_instance" "cp_node" {
   machine_type   = var.machine_type
   zone           = local.zone
   can_ip_forward = true
-  tags           = ["k8s-node"]
+  tags           = ["k8s-node", "k8s-cp"]
 
   service_account {
     email  = google_service_account.k8s_node.email
