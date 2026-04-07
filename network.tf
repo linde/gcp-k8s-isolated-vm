@@ -56,4 +56,28 @@ resource "google_compute_firewall" "allow_management" {
   source_ranges = ["0.0.0.0/0"]
 }
 
+# Allow external load balancer HTTP ingress traffic to the K8s worker node instances
+resource "google_compute_firewall" "allow_http" {
+  name    = "allow-http-${local.rand_suffix}"
+  project = var.gcp_project
+  network = google_compute_network.k8s.id
+  target_tags = ["k8s-node"]
+
+  allow {
+    protocol = "tcp"
+    ports    = ["80"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+}
+
+# Route Pod CIDR via the worker node so the Proxied VM can address the Proxy Pod directly
+resource "google_compute_route" "pod_cidr_route" {
+  name             = "pod-cidr-${local.rand_suffix}"
+  network          = google_compute_network.k8s.id
+  dest_range       = "192.168.0.0/16"
+  next_hop_instance = google_compute_instance.worker_node[0].self_link
+  priority         = 1000
+}
+
 

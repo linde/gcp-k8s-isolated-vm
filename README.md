@@ -4,51 +4,69 @@ This project is a scratchpad to explore a K8s managed isolated VM. It is not int
 
 The idea is that you can use K8s to manage ingress and egress for a VM that is not part of the cluster. Currently we manage this VM via terraform along with the lifecycle of the cluster itself, but it is not a stretch to imagine that we could manage this VM via a K8s operator.
 
-
 ## Architecture
 
-In the example, we call this VM a "proxied VM" because it is proxied to the cluster via native Layer 3 routing. Ingress to it comes only via a Kubernetes LoadBalancer service; all egress is routed via GCP networking to the a node.
+In this example, the VM is integrated via a **Geneve Overlay Tunnel** (UDP port 6081). A privileged Proxy Pod sits inside the cluster acting as one end of the tunnel, and the VM acts as the other end. All ingress traffic to the pod routes exclusively through the tunnel to the VM; all egress traffic from the VM traverses the tunnel and exits the cluster via the pod's gateway.
 
-- **Inbound (Ingress)**: Kubernetes LoadBalancer Service -> GCP External Load Balancer -> K8s EndpointSlice -> Proxied VM (Layer 3 IP Routing)
-- **Outbound (Egress)**: Transparent Layer 3 VPC Routing (VM -> Worker Node NAT -> Internet)
+- **Inbound (Ingress)**: Kubernetes LoadBalancer Service -> Proxy Pod -> Geneve Tunnel -> Proxied VM
+- **Outbound (Egress)**: Proxied VM -> Geneve Tunnel -> Proxy Pod (NAT Masquerade) -> Internet
 
 ### VM Isolation and Traffic Flow
 
-The following diagram illustrates how the Proxied VM is isolated within the VPC and how all edge traffic is funneled through the Kubernetes node:
+The following diagram illustrates the Geneve Overlay architecture and the integration of all Terraform and Kubernetes components:
 
 ```mermaid
 graph LR
     Internet((Internet))
 
-    subgraph VPC [GCP VPC Network]
+    subgraph GCP_VPC [GCP VPC k8s-network]
         direction TB
-        GCP_LB[GCP External Load Balancer]
-        subgraph Subnet [k8s-subnet]
-            direction LR
-            K8s_Node[Kubernetes Worker Node]
-            Proxied_VM[Proxied VM]
+        subgraph Subnet [k8s-subnet 10.0.0.0/24]
+            direction TB
+            subgraph Cluster [Kubernetes Cluster]
+                direction TB
+                CP_Node[google_compute_instance.cp_node]
+                Worker_Node[google_compute_instance.worker_node]
+                Proxy_Pod[Deployment: geneve-proxy]
+                Proxy_SVC[Service: proxied-svc LoadBalancer]
+            end
+
+            subgraph VM [External Infrastructure]
+                Proxied_VM[google_compute_instance.proxied_vm]
+            end
         end
     end
 
     %% Inbound Traffic
-    Internet -->|External IP| GCP_LB
-    GCP_LB -->|NodePort| K8s_Node
-    K8s_Node -->|Layer 3 DNAT| Proxied_VM
-
-    %% Cluster Internal Traffic
-    K8s_Node -->|Service/EndpointSlice| Proxied_VM
+    Internet -->|1. Ingress via Service| Proxy_SVC
+    Proxy_SVC -->|2. Forward to Pod| Proxy_Pod
+    Proxy_Pod -->|3. Geneve Tunnel UDP 6081| Proxied_VM
 
     %% Outbound Traffic (Egress)
-    Proxied_VM -->|Egress Route| K8s_Node
-    K8s_Node -->|NAT Masquerade| Internet
+    Proxied_VM -->|4. Default Route via Overlay| Proxy_Pod
+    Proxy_Pod -->|5. NAT Masquerade| Internet
 ```
 
-### Layer 3 VPC Routing Architecture Components
+### Provisioned Infrastructure Resources
 
-- **Proxied VM**: Tagged with a specific via-node tag, runs standard applications. No proxy environment variables are needed.
-- **GCP VPC Static Route**: Points `0.0.0.0/0` (internet egress) from tagged instances to the Worker Node as the next hop.
-- **Kubernetes Worker Node**: Acting as a transparent NAT gateway using standard `iptables` MASQUERADE rules.
-- **Kubernetes Service & EndpointSlice**: Routes cluster-internal or NodePort traffic directly to the VM's private IP.
+The project sets up the following infrastructure using Terraform and Kubernetes manifests:
+
+#### Compute & Network Resources (Terraform)
+- **`google_compute_network.k8s`**: The core VPC network linking the cluster and isolated VM.
+- **`google_compute_subnetwork.k8s_subnet`**: The regional subnet providing internal IP address ranges.
+- **`google_compute_address.cp_static_ip`**: External static IP address for the Control Plane node.
+- **`google_compute_address.proxied_vm_ip`**: Internal static IP for the Proxied VM.
+- **`google_compute_firewall.allow_internal_all`**: Opens required internal communication within the VPC subnet.
+- **`google_compute_firewall.allow_management`**: Allows administrative SSH/K8s API access.
+- **`google_compute_firewall.allow_http`**: Permits external load balancer access via port 80.
+- **`google_compute_route.pod_cidr_route`**: Explicit routing for the 192.168.0.0/16 Pod CIDR block via the worker node.
+- **`google_compute_instance.cp_node`**: The Kubernetes control plane component.
+- **`google_compute_instance.worker_node`**: The Kubernetes worker node hosting the proxy container.
+- **`google_compute_instance.proxied_vm`**: The external target VM shielded by the proxy via Geneve overlay routing.
+
+#### Proxy & Networking Components (Kubernetes)
+- **`Deployment/geneve-proxy`**: Runs the privileged container terminating Geneve interfaces, handling port forwarding, and managing masqueraded NAT.
+- **`Service/proxied-svc`**: Type `LoadBalancer` exposing the proxy endpoints for external client consumption.
 
 ## Getting Started
 
@@ -76,9 +94,8 @@ Once the cluster is up and running, extract the Control Plane IP and fetch the `
 ```bash
 export CP_IP=$(terraform output -raw control_plane_public_ip)
 export KUBECONFIG="$(pwd)/.tmp/kubeconfig.yaml"
-
 export SSH_KEY=$(terraform output -raw ssh_key_path)
-export SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${SSH_KEY}"
+export SSH_OPTS="-q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${SSH_KEY}"
 
 # check the startup script on the control plane
 ssh ${SSH_OPTS} admin@${CP_IP} "sudo journalctl -u google-startup-scripts.service -f"
@@ -105,11 +122,6 @@ NAME          TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)        AGE
 proxied-svc   LoadBalancer   10.101.149.154   35.188.141.185   80:31234/TCP   1m
 ```
 
-Also verify endpoints point to the VM IP:
-```bash
-kubectl get endpoints proxied-svc
-```
-
 ### 4. Test the Bridge (Layer 3 Ingress & Egress)
 
 The `e2-micro` VM is running an inline Python script that serves HTTP requests on port `80`. When it receives a request, it synchronously tests direct internet egress by calling `httpbin.org/ip`.
@@ -118,7 +130,7 @@ Now that we have a LoadBalancer, you can test it directly from outside the clust
 
 ```bash
 export EXTERNAL_IP=$(kubectl get svc proxied-svc -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-curl http://$EXTERNAL_IP
+curl http://${EXTERNAL_IP}
 ```
 
 **Expected output:**
