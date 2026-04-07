@@ -8,6 +8,8 @@ spec:
   selector:
     matchLabels:
       app: geneve-proxy
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
@@ -23,7 +25,10 @@ spec:
         - /bin/sh
         - -c
         - |
-          apt-get update && apt-get install -y iproute2 iptables socat
+          apt-get update && apt-get install -y iproute2 iptables socat procps
+          
+          # Clean up any dangling interface if container restarted
+          ip link del geneve0 2>/dev/null || true
           
           # Setup Geneve interface towards the VM
           ip link add name geneve0 type geneve id 100 remote ${proxied_vm_ip}
@@ -34,8 +39,11 @@ spec:
           sysctl -w net.ipv4.ip_forward=1
           iptables -t nat -A POSTROUTING -s 192.168.100.0/24 -o eth0 -j MASQUERADE
           
-          # Forward inbound port 80 traffic over the Geneve tunnel
-          socat TCP-LISTEN:80,fork TCP:192.168.100.2:80
+          # Forward inbound traffic dynamically over the Geneve tunnel for multiple configured ports
+%{ for p in proxied_ports ~}
+          socat TCP-LISTEN:${p},reuseaddr,fork TCP:192.168.100.2:${p} &
+%{ endfor ~}
+          wait
 ---
 apiVersion: v1
 kind: Service
@@ -44,9 +52,10 @@ metadata:
 spec:
   type: LoadBalancer
   ports:
-  # TODO make these configurable as an extenisble list
-  - name: inbound
-    port: 80
-    targetPort: 80
+%{ for p in proxied_ports ~}
+  - name: port-${p}
+    port: ${p}
+    targetPort: ${p}
+%{ endfor ~}
   selector:
     app: geneve-proxy

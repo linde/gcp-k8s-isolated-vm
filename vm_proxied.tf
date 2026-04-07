@@ -32,6 +32,7 @@ resource "google_compute_instance" "proxied_vm" {
 
   metadata_startup_script = templatefile("${path.module}/scripts/proxied_vm_startup.sh.tftpl", {
     worker_node_ip = google_compute_instance.worker_node[0].network_interface[0].network_ip
+    proxied_ports  = var.proxied_ports
   })
 
   depends_on = [time_sleep.wait_for_services]
@@ -40,6 +41,7 @@ resource "google_compute_instance" "proxied_vm" {
 resource "local_file" "proxied_pod_manifest" {
   filename = "${path.module}/.tmp/proxy-svc.yaml"
   content = templatefile("${path.module}/scripts/proxy-svc.yaml.tftpl", {
-    proxied_vm_ip     = google_compute_address.proxied_vm_ip.address
+    proxied_vm_ip = google_compute_address.proxied_vm_ip.address
+    proxied_ports = var.proxied_ports
   })
 }

@@ -131,6 +131,10 @@ Now that we have a LoadBalancer, you can test it directly from outside the clust
 ```bash
 export EXTERNAL_IP=$(kubectl get svc proxied-svc -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 curl http://${EXTERNAL_IP}
+
+# add other ports in the terraform variable proxied_ports
+curl http://${EXTERNAL_IP}:8080
+
 ```
 
 **Expected output:**

@@ -37,6 +37,12 @@ variable "k8s_subnet_cidr" {
 }
 
 
+variable "proxied_ports" {
+  type        = list(number)
+  default     = [80, 8080]
+  description = "Array of network ports exposed on the geneve proxied VM."
+}
+
 resource "random_id" "rand" {
   byte_length = 4
 }

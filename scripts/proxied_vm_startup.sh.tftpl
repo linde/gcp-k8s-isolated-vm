@@ -57,9 +57,21 @@ class ProxiedHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(f'{{"error": "Proxy request failed", "details": "{str(e)}" }}\n'.encode('utf-8'))
 
-with socketserver.TCPServer(("192.168.100.2", PORT), ProxiedHandler) as httpd:
-    print("Serving traffic on geneve0 (192.168.100.2) port", PORT, flush=True)
-    httpd.serve_forever()
+import threading
+
+def run_server(port):
+    with socketserver.TCPServer(("192.168.100.2", port), ProxiedHandler) as httpd:
+        print(f"Serving traffic on geneve0 (192.168.100.2) port {port}", flush=True)
+        httpd.serve_forever()
+
+ports = [${join(", ", proxied_ports)}]
+for p in ports:
+    threading.Thread(target=run_server, args=(p,), daemon=True).start()
+
+# Keep the main thread alive
+import time
+while True:
+    time.sleep(3600)
 EOF
 
 chmod +x /home/admin/proxied_test.py
