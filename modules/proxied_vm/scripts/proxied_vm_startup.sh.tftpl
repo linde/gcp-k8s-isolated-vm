@@ -1,41 +1,26 @@
 #!/bin/bash
-# Minimal VM configuration: Set up Geneve interface and route traffic via the Proxy Pod
 apt-get update
 apt-get install -y iproute2
 
-# Wait for proxy pod to be ready and interface to be available
 sleep 10
 
-# Since the pod uses hostNetwork, the remote underlay IP is the Worker Node's IP or can be assumed dynamically.
-# For a scratchpad, since the Proxy Pod handles ingress/egress, we will set up the Geneve interface targeting the remote Pod/Node IP via the internal VPC layer.
-
-# Fetch default gateway to preserve underlay routing to GCP/Worker Node
 GATEWAY_IP=$(ip route show default | awk '{print $3}')
-
-# Create the Geneve Tunnel interface towards the Proxy Pod (remote endpoint)
-# Note: The proxy pod runs on the k8s worker node with hostNetwork=true.
-# Let's extract the worker node IP from metadata or DNS, or assume the standard proxy IP.
 WORKER_IP="${worker_node_ip}"
-
 
 ip link add name geneve0 type geneve id 100 remote $WORKER_IP
 ip addr add 192.168.100.2/24 dev geneve0
 ip link set geneve0 up
 
-# Add an explicit route for the Worker Node/Proxy Pod through the standard gateway
 ip route add $WORKER_IP via $GATEWAY_IP dev eth0
-
-# Change default gateway to send all internet/egress traffic across the Geneve tunnel
 ip route change default via 192.168.100.1 dev geneve0
 
-# Start a simple HTTP listener on the Geneve/Overlay IP to verify functional ingress proxying
 cat << 'EOF' > /home/admin/proxied_test.py
 import http.server
 import socketserver
 import urllib.request
 import json
-
-PORT = 80
+import threading
+import time
 
 class ProxiedHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
@@ -57,8 +42,6 @@ class ProxiedHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(f'{{"error": "Proxy request failed", "details": "{str(e)}" }}\n'.encode('utf-8'))
 
-import threading
-
 def run_server(port):
     with socketserver.TCPServer(("192.168.100.2", port), ProxiedHandler) as httpd:
         print(f"Serving traffic on geneve0 (192.168.100.2) port {port}", flush=True)
@@ -68,8 +51,6 @@ ports = [${join(", ", proxied_ports)}]
 for p in ports:
     threading.Thread(target=run_server, args=(p,), daemon=True).start()
 
-# Keep the main thread alive
-import time
 while True:
     time.sleep(3600)
 EOF
