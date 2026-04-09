@@ -1,0 +1,71 @@
+#!/bin/bash
+
+#  TODO: make this script unnecessary with a more robust tf destroy teardown
+
+# This script finds and deletes GCP resources associated with the k8s network
+# that were created by Kubernetes (e.g. via Cloud Controller Manager) and thus
+# prevent Terraform from cleanly destroying the network.
+
+PROJECT=$(grep -oP 'gcp_project\s*=\s*"\K[^"]+' terraform.tfvars 2>/dev/null)
+
+if [ -z "$PROJECT" ]; then
+    PROJECT=$(gcloud config get-value project 2>/dev/null)
+fi
+
+if [ -z "$PROJECT" ]; then
+    echo "Error: Could not determine GCP project."
+    exit 1
+fi
+
+echo "Using GCP Project: $PROJECT"
+
+# Find the k8s network name (assuming it starts with k8s-network-)
+NETWORK=$(gcloud compute networks list --project="$PROJECT" --filter="name ~ ^k8s-network-" --format="value(name)" | head -n 1)
+
+if [ -z "$NETWORK" ]; then
+    echo "No network starting with 'k8s-network-' found in project $PROJECT."
+    exit 0
+fi
+
+echo "Found network: $NETWORK"
+
+echo "Looking for firewalls to delete..."
+FIREWALLS=$(gcloud compute firewall-rules list --project="$PROJECT" --filter="network:$NETWORK AND NOT name ~ ^allow-" --format="value(name)")
+
+for fw in $FIREWALLS; do
+    echo "Deleting firewall: $fw"
+    gcloud compute firewall-rules delete "$fw" --project="$PROJECT" --quiet
+done
+
+echo "Looking for forwarding rules to delete..."
+# Forwarding rules depend on target pools or backend services, usually created for LoadBalancers
+FORWARDING_RULES=$(gcloud compute forwarding-rules list --project="$PROJECT" --format="value(name)")
+
+for rule in $FORWARDING_RULES; do
+    # Double check if it belongs to our network (often they are global or regional but we can just try to filter or delete likely ones)
+    if [[ "$rule" == a* ]] || [[ "$rule" == k8s* ]]; then
+        echo "Deleting forwarding rule: $rule"
+        # Need region for forwarding rules usually, let's check if we can get region
+        REGION=$(gcloud compute forwarding-rules describe "$rule" --project="$PROJECT" --format="value(region)" 2>/dev/null | awk -F/ '{print $NF}')
+        if [ -n "$REGION" ]; then
+            gcloud compute forwarding-rules delete "$rule" --project="$PROJECT" --region="$REGION" --quiet
+        else
+            gcloud compute forwarding-rules delete "$rule" --project="$PROJECT" --global --quiet 2>/dev/null
+        fi
+    fi
+done
+
+echo "Looking for routes to delete..."
+# Ignore routes created by terraform (pod-cidr-*) and default routes
+ROUTES=$(gcloud compute routes list --project="$PROJECT" --filter="network:$NETWORK AND NOT name ~ ^pod-cidr-" --format="value(name)")
+
+for route in $ROUTES; do
+    # Check if it's a default route to avoid deleting internet gateway routes if they are needed, but usually terraform recreates them or we just want to delete k8s routes
+    if [[ "$route" == default* ]]; then
+        continue
+    fi
+    echo "Deleting route: $route"
+    gcloud compute routes delete "$route" --project="$PROJECT" --quiet
+done
+
+echo "Cleanup complete."
