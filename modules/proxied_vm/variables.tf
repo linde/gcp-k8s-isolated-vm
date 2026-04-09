@@ -48,3 +48,15 @@ variable "name_suffix" {
   default     = ""
   description = "Optional suffix to append to resource names for uniqueness."
 }
+
+variable "name_prefix" {
+  type        = string
+  default     = "proxied-vm"
+  description = "Prefix for the proxied VM resource names."
+}
+
+variable "tunnel_id" {
+  type        = number
+  default     = 100
+  description = "The Geneve tunnel ID and third octet for the overlay subnet."
+}

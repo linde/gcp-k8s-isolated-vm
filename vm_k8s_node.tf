@@ -43,7 +43,7 @@ resource "google_compute_instance" "worker_node" {
     ipv6_enabled     = false
     kubeadm_token    = local.kubeadm_token
     ccm_yaml         = ""
-    proxied_vm_ip     = module.proxied_vm.proxied_vm_ip
+    proxied_vm_ip     = ""
   })
 
   # Remove node from cluster on destroy so we clean up cloud controller managed GCP resources

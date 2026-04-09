@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: geneve-proxy
+  name: ${name_prefix}-${name_suffix}
   namespace: default
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: geneve-proxy
+      app: ${name_prefix}-${name_suffix}
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: geneve-proxy
+        app: ${name_prefix}-${name_suffix}
     spec:
       hostNetwork: true
       containers:
@@ -28,27 +28,27 @@ spec:
           apt-get update && apt-get install -y iproute2 iptables socat procps
           
           # Clean up any dangling interface if container restarted
-          ip link del geneve0 2>/dev/null || true
+          ip link del geneve${tunnel_id} 2>/dev/null || true
           
           # Setup Geneve interface towards the VM
-          ip link add name geneve0 type geneve id 100 remote ${proxied_vm_ip}
-          ip addr add 192.168.100.1/24 dev geneve0
-          ip link set geneve0 up
+          ip link add name geneve${tunnel_id} type geneve id ${tunnel_id} remote ${proxied_vm_ip}
+          ip addr add 192.168.${tunnel_id}.1/24 dev geneve${tunnel_id}
+          ip link set geneve${tunnel_id} up
           
           # Enable IP forwarding and MASQUERADE for egress NAT
           sysctl -w net.ipv4.ip_forward=1
-          iptables -t nat -A POSTROUTING -s 192.168.100.0/24 -o eth0 -j MASQUERADE
+          iptables -t nat -A POSTROUTING -s 192.168.${tunnel_id}.0/24 -o eth0 -j MASQUERADE
           
           # Forward inbound traffic dynamically over the Geneve tunnel for multiple configured ports
 %{ for p in proxied_ports ~}
-          socat TCP-LISTEN:${p},reuseaddr,fork TCP:192.168.100.2:${p} &
+          socat TCP-LISTEN:${p},reuseaddr,fork TCP:192.168.${tunnel_id}.2:${p} &
 %{ endfor ~}
           wait
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: proxied-svc
+  name: ${name_prefix}-svc
 spec:
   type: LoadBalancer
   ports:
@@ -58,4 +58,4 @@ spec:
     targetPort: ${p}
 %{ endfor ~}
   selector:
-    app: geneve-proxy
+    app: ${name_prefix}-${name_suffix}

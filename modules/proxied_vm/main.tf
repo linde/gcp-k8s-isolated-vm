@@ -3,14 +3,14 @@ locals {
 }
 
 resource "google_compute_address" "proxied_vm_ip" {
-  name         = "proxied-vm-ip-${local.suffix}"
+  name         = "${var.name_prefix}-ip-${local.suffix}"
   region       = var.region
   address_type = "INTERNAL"
   subnetwork   = var.subnetwork_id
 }
 
 resource "google_compute_instance" "proxied_vm" {
-  name         = "proxied-vm-${local.suffix}"
+  name         = "${var.name_prefix}-${local.suffix}"
   project      = var.gcp_project
   machine_type = "e2-micro"
   zone         = var.zone
@@ -37,5 +37,6 @@ resource "google_compute_instance" "proxied_vm" {
   metadata_startup_script = templatefile("${path.module}/scripts/proxied_vm_startup.sh.tftpl", {
     worker_node_ip = var.worker_node_ip
     proxied_ports  = var.proxied_ports
+    tunnel_id      = var.tunnel_id
   })
 }

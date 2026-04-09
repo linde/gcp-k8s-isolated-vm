@@ -36,11 +36,13 @@ variable "k8s_subnet_cidr" {
   description = "The CIDR range for the Kubernetes subnet."
 }
 
-
-variable "proxied_ports" {
-  type        = list(number)
-  default     = [80, 8080]
-  description = "Array of network ports exposed on the geneve proxied VM."
+variable "proxied_vms" {
+  type        = map(list(number))
+  default     = {
+    httpbin1 = [80, 8080]
+    httpbin2 = [8888]
+  }
+  description = "Mapping of VM name prefixes to lists of exposed ports."
 }
 
 resource "random_id" "rand" {

@@ -65,7 +65,7 @@ resource "google_compute_firewall" "allow_http" {
 
   allow {
     protocol = "tcp"
-    ports    = [for p in var.proxied_ports : tostring(p)]
+    ports    = [for p in distinct(flatten(values(var.proxied_vms))) : tostring(p)]
   }
 
   source_ranges = ["0.0.0.0/0"]

@@ -104,37 +104,36 @@ ssh ${SSH_OPTS} admin@${CP_IP} "sudo journalctl -u google-startup-scripts.servic
 # then get a kubeconfig for the host:
 ssh ${SSH_OPTS} admin@${CP_IP} "sudo cat /etc/kubernetes/admin.conf" > ${KUBECONFIG}
 
-# now deploy our service and endpoints to proxy to the vm
-kubectl apply -f .tmp/proxy-svc.yaml
+# now deploy our services and endpoints to proxy to the VMs
+kubectl apply -f .tmp/manifests/
 ```
 
 ### 3. Verify the Deployment
 
-Verify that the `proxied-svc` is created with type `LoadBalancer` and wait for it to get an `EXTERNAL-IP` (this may take a minute as GCP provisions the load balancer):
+Verify that the load balancer services are created and wait for them to get an `EXTERNAL-IP` (this may take a minute as GCP provisions the load balancers):
 
 ```bash
-kubectl get svc proxied-svc -w
+kubectl get svc
 ```
 
 Expect output similar to:
 ```
-NAME          TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)        AGE
-proxied-svc   LoadBalancer   10.101.149.154   35.188.141.185   80:31234/TCP   1m
+NAME           TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)        AGE
+httpbin1-svc   LoadBalancer   10.101.149.154   35.188.141.185   80:31234/TCP   1m
 ```
 
 ### 4. Test the Bridge (Layer 3 Ingress & Egress)
 
-The `e2-micro` VM is running an inline Python script that serves HTTP requests on port `80`. When it receives a request, it synchronously tests direct internet egress by calling `httpbin.org/ip`.
+Each `e2-micro` VM is running an inline Python script that serves HTTP requests on its configured ports. When it receives a request, it synchronously tests direct internet egress by calling `httpbin.org/ip`.
 
-Now that we have a LoadBalancer, you can test it directly from outside the cluster (e.g., from your local machine if firewalls allow, or from the control plane node):
+Now that we have LoadBalancers, you can test them directly from outside the cluster (e.g., from your local machine if firewalls allow, or from the control plane node):
 
 ```bash
-export EXTERNAL_IP=$(kubectl get svc proxied-svc -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+export EXTERNAL_IP=$(kubectl get svc httpbin1-svc -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 curl http://${EXTERNAL_IP}
 
-# add other ports in the terraform variable proxied_ports
+# test other exposed ports configured in the var.proxied_vms map
 curl http://${EXTERNAL_IP}:8080
-
 ```
 
 **Expected output:**
