@@ -17,6 +17,8 @@ spec:
     spec:
       hostNetwork: true
       containers:
+
+
       - name: proxy
         image: debian:bookworm-slim
         securityContext:
@@ -25,8 +27,37 @@ spec:
         - /bin/sh
         - -c
         - |
-          apt-get update && apt-get install -y iproute2 iptables socat procps
+          apt-get update && apt-get install -y iproute2 iptables socat procps strongswan
           
+          # Configure IPsec transport mode to transparently encrypt all overlay traffic to the VM
+          cat << 'EOF' > /etc/ipsec.conf
+          config setup
+              charondebug="ike 1, knl 1, cfg 0"
+              uniqueids=no
+
+          conn %default
+              ikelifetime=60m
+              keylife=20m
+              rekeymargin=3m
+              keyingtries=1
+              authby=secret
+              keyexchange=ikev2
+
+          conn tunnel
+              left=%defaultroute
+              right=${proxied_vm_ip}
+
+
+              type=transport
+              auto=start
+          EOF
+
+          cat << 'EOF' > /etc/ipsec.secrets
+          : PSK "supersecureipsecpresharedkey"
+          EOF
+
+          ipsec restart
+
           # Clean up any dangling interface if container restarted
           ip link del geneve${tunnel_id} 2>/dev/null || true
           
@@ -37,13 +68,16 @@ spec:
           
           # Enable IP forwarding and MASQUERADE for egress NAT
           sysctl -w net.ipv4.ip_forward=1
-          iptables -t nat -A POSTROUTING -s 192.168.${tunnel_id}.0/24 -o eth0 -j MASQUERADE
+          iptables -t nat -A POSTROUTING -s 192.168.${tunnel_id}.0/24 -o ens4 -j MASQUERADE
+
+
           
-          # Forward inbound traffic dynamically over the Geneve tunnel for multiple configured ports
+          # Forward inbound traffic dynamically over the Geneve tunnel using standard kernel TCP forwarding
 %{ for p in proxied_ports ~}
           socat TCP-LISTEN:${p},reuseaddr,fork TCP:192.168.${tunnel_id}.2:${p} &
 %{ endfor ~}
           wait
+
 ---
 apiVersion: v1
 kind: Service

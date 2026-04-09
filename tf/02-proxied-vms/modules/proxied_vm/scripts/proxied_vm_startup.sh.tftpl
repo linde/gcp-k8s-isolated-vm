@@ -1,6 +1,36 @@
 #!/bin/bash
 apt-get update
-apt-get install -y iproute2
+apt-get install -y iproute2 socat strongswan
+
+# Configure IPsec transport mode to transparently encrypt all overlay traffic from the K8s worker node
+cat << 'EOF' > /etc/ipsec.conf
+config setup
+    charondebug="ike 1, knl 1, cfg 0"
+    uniqueids=no
+
+conn %default
+    ikelifetime=60m
+    keylife=20m
+    rekeymargin=3m
+    keyingtries=1
+    authby=secret
+    keyexchange=ikev2
+
+conn tunnel
+    left=%defaultroute
+    right=${worker_node_ip}
+    type=transport
+    auto=start
+EOF
+
+cat << 'EOF' > /etc/ipsec.secrets
+: PSK "supersecureipsecpresharedkey"
+EOF
+
+ipsec restart
+
+# Force DNS resolution over the Geneve default route
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
 
 sleep 10
 
@@ -11,8 +41,9 @@ ip link add name geneve${tunnel_id} type geneve id ${tunnel_id} remote $WORKER_I
 ip addr add 192.168.${tunnel_id}.2/24 dev geneve${tunnel_id}
 ip link set geneve${tunnel_id} up
 
-ip route add $WORKER_IP via $GATEWAY_IP dev eth0
-ip route change default via 192.168.${tunnel_id}.1 dev geneve${tunnel_id}
+ip route add $WORKER_IP via $GATEWAY_IP dev ens4
+ip route del default || true
+ip route add default via 192.168.${tunnel_id}.1 dev geneve${tunnel_id}
 
 cat << 'EOF' > /home/admin/proxied_test.py
 import http.server
@@ -35,18 +66,20 @@ class ProxiedHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.end_headers()
-            self.wfile.write(f'{{"message": "Successfully proxied ingress and egress over Geneve tunnel", "origin_ip": "{origin_ip}", "httpbin_status": {status}}}\n'.encode('utf-8'))
-            print("Successfully handled GET request and Geneve proxy hit.", flush=True)
+            self.wfile.write(f'{{"message": "Successfully proxied ingress and egress over IPsec/Geneve tunnel", "origin_ip": "{origin_ip}", "httpbin_status": {status}}}\n'.encode('utf-8'))
+            print("Successfully handled GET request and IPsec proxy hit.", flush=True)
         except Exception as e:
             self.send_response(500)
             self.send_header("Content-type", "application/json")
             self.end_headers()
             self.wfile.write(f'{{"error": "Proxy request failed", "details": "{str(e)}" }}\n'.encode('utf-8'))
 
+
+
 def run_server(port):
-    host_ip = "192.168." + os.environ.get("TUNNEL_ID", "100") + ".2"
+    host_ip = "192.168.${tunnel_id}.2"
     with socketserver.TCPServer((host_ip, port), ProxiedHandler) as httpd:
-        print(f"Serving traffic on geneve port {port}", flush=True)
+        print(f"Serving internal payload traffic directly on overlay port {port}", flush=True)
         httpd.serve_forever()
 
 ports = [${join(", ", proxied_ports)}]

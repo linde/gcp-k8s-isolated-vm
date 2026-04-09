@@ -60,3 +60,18 @@ variable "tunnel_id" {
   default     = 100
   description = "The Geneve tunnel ID and third octet for the overlay subnet."
 }
+
+variable "ca_cert" {
+  type        = string
+  description = "The CA certificate PEM string."
+}
+
+variable "vm_tls_cert" {
+  type        = string
+  description = "The VM client/server certificate PEM string."
+}
+
+variable "vm_tls_key" {
+  type        = string
+  description = "The VM private key PEM string."
+}

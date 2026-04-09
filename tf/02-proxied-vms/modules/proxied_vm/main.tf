@@ -38,5 +38,8 @@ resource "google_compute_instance" "proxied_vm" {
     worker_node_ip = var.worker_node_ip
     proxied_ports  = var.proxied_ports
     tunnel_id      = var.tunnel_id
+    ca_cert        = var.ca_cert
+    vm_tls_cert    = var.vm_tls_cert
+    vm_tls_key     = var.vm_tls_key
   })
 }
