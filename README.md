@@ -106,8 +106,7 @@ terraform apply
 Find your LoadBalancer public endpoints and confirm traffic securely traverses the tunnel:
 
 ```bash
-# Export the base cluster kubeconfig
-export KUBECONFIG=$(realpath ../01-base-cluster/kubeconfig)
+# using the KUBECONFIG set above
 
 # Dynamically fetch all LoadBalancer IPs and their associated ports, then curl each endpoint automatically:
 kubectl get svc -o json | jq -r '
