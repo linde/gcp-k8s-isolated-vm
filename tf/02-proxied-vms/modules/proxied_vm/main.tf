@@ -45,3 +45,5 @@ resource "google_compute_instance" "proxied_vm" {
     vm_tls_key     = var.vm_tls_key
   })
 }
+
+

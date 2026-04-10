@@ -25,24 +25,12 @@ module "proxied_vm" {
   tunnel_id      = 100 + index(sort(keys(var.proxied_vms)), each.key)
 
   # Inject mTLS parameters for socat transport encryption on the VM side
-  ca_cert       = tls_self_signed_cert.ca.cert_pem
-  vm_tls_cert   = tls_locally_signed_cert.vm.cert_pem
-  vm_tls_key    = tls_private_key.vm.private_key_pem
+  ca_cert        = tls_self_signed_cert.ca.cert_pem
+  vm_tls_cert    = tls_locally_signed_cert.vm.cert_pem
+  vm_tls_key     = tls_private_key.vm.private_key_pem
+  proxy_tls_cert = tls_locally_signed_cert.proxy.cert_pem
+  proxy_tls_key  = tls_private_key.proxy.private_key_pem
 }
 
-resource "local_file" "proxied_pod_manifest" {
-  for_each = var.proxied_vms
-  filename = "${path.module}/.tmp/manifests/proxy-svc-${each.key}.yaml"
-  content = templatefile("${path.module}/scripts/proxy-svc.yaml.tftpl", {
-    name_prefix    = each.key
-    name_suffix    = local.rand_suffix
-    proxied_vm_ip  = module.proxied_vm[each.key].proxied_vm_ip
-    proxied_ports  = each.value
-    tunnel_id      = 100 + index(sort(keys(var.proxied_vms)), each.key)
 
-    # Inject mTLS parameters for inline heredoc rendering in the proxy pod startup script
-    ca_cert        = tls_self_signed_cert.ca.cert_pem
-    proxy_tls_cert = tls_locally_signed_cert.proxy.cert_pem
-    proxy_tls_key  = tls_private_key.proxy.private_key_pem
-  })
-}
+

@@ -22,7 +22,7 @@ The repository has two independent Terraform workspaces to cleanly isolate the l
 
 ## Traffic Flow and Network Architecture
 
-The following diagram illustrates how the isolated virtual machine integrates into the Kubernetes cluster via an IPsec-encrypted Geneve overlay tunnel, routing both external ingress and direct egress entirely through the proxy pod on the worker node:
+The following diagram illustrates how the isolated virtual machine integrates into the Kubernetes cluster via an TLS-encrypted Geneve overlay tunnel, routing both external ingress and direct egress entirely through the proxy pod on the worker node:
 
 ```mermaid
 graph LR
@@ -45,7 +45,7 @@ graph LR
     Internet -->|LoadBalancer IP| GCP_LB
     GCP_LB -->|NodePort| K8s_Node
     K8s_Node -->|socat TCP-LISTEN| Proxy_Pod
-    Proxy_Pod -->|IPsec Encrypted Geneve| Proxied_VM
+    Proxy_Pod -->|TLS Encrypted Geneve| Proxied_VM
 
     %% Outbound Traffic (Egress)
     Proxied_VM -->|Default Gateway| Proxy_Pod
@@ -85,18 +85,7 @@ Initialize and apply the core infrastructure first:
 terraform init
 terraform apply
 
-export CP_IP=$(terraform output -raw control_plane_public_ip)
-export SSH_KEY=$(terraform output -raw ssh_key_path)
-export KUBECONFIG="$(pwd)/.tmp/kubeconfig.yaml"
-
-export SSH_OPTS="-q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${SSH_KEY}"
-
-# you can watch the control plane boot with:
-ssh ${SSH_OPTS} admin@${CP_IP} "sudo journalctl -u google-startup-scripts.service -f" 
-# look for it to say: Kubernetes is already initialized.
-
-# then ctrl-c out, and get a kubeconfig for the host:
-ssh ${SSH_OPTS} admin@${CP_IP} "sudo cat /etc/kubernetes/admin.conf" > ${KUBECONFIG}
+export KUBECONFIG=$(terraform output -raw kubeconfig_path)
 ```
 
 ### 2. Provision the Application Layer (Proxied VMs)
@@ -112,23 +101,15 @@ terraform init
 terraform apply
 ```
 
-### 3. Apply Generated Manifests to Kubernetes
-
-Terraform automatically renders manifests injected with the pre-shared TLS material into the local repository. Apply them using `kubectl`:
-
-```bash
-export KUBECONFIG="$(pwd)/../01-base-cluster/.tmp/kubeconfig.yaml"
-
-kubectl apply -f .tmp/manifests/
-```
-
-### 4. Test Connectivity
+### 3. Test Connectivity
 
 Find your LoadBalancer public endpoints and confirm traffic securely traverses the tunnel:
 
 ```bash
+# using the KUBECONFIG set above in tf/01-base-cluster 
 kubectl get svc
-
-# Standard unencrypted queries to test the tunnel loopback translation
+```
+# use the external IP and ports from the service output corresponding
+# to the proxied_vms variable in tf/02-proxied-vms
 curl http://<EXTERNAL-IP>
 ```

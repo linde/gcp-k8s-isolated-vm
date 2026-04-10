@@ -75,3 +75,13 @@ variable "vm_tls_key" {
   type        = string
   description = "The VM private key PEM string."
 }
+
+variable "proxy_tls_cert" {
+  type        = string
+  description = "The Proxy client/server certificate PEM string."
+}
+
+variable "proxy_tls_key" {
+  type        = string
+  description = "The Proxy private key PEM string."
+}

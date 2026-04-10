@@ -23,6 +23,10 @@ terraform {
     ssh = {
       source = "loafoe/ssh"
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 2.30"
+    }
   }
 }
 
@@ -30,4 +34,8 @@ terraform {
 provider "google" {
   project = data.terraform_remote_state.base.outputs.gcp_project
   region  = data.terraform_remote_state.base.outputs.region
+}
+
+provider "kubernetes" {
+  config_path = data.terraform_remote_state.base.outputs.kubeconfig_path
 }
