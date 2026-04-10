@@ -12,3 +12,6 @@ variable "proxied_vms" {
   }
   description = "Mapping of VM name prefixes to lists of exposed ports."
 }
+
+
+

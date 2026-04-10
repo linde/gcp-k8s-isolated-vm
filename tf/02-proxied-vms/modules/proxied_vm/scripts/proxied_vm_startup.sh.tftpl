@@ -1,51 +1,6 @@
 #!/bin/bash
 apt-get update
-apt-get install -y iproute2 socat strongswan
-
-# Write the infrastructure-managed TLS materials into the standard StrongSwan PKI folder hierarchy
-mkdir -p /etc/ipsec.d/cacerts /etc/ipsec.d/certs /etc/ipsec.d/private
-
-cat << 'EOF' > /etc/ipsec.d/cacerts/ca.crt
-${ca_cert}
-EOF
-
-cat << 'EOF' > /etc/ipsec.d/certs/peer.crt
-${vm_tls_cert}
-EOF
-
-cat << 'EOF' > /etc/ipsec.d/private/peer.key
-${vm_tls_key}
-EOF
-
-chmod 600 /etc/ipsec.d/private/peer.key
-
-# Configure IPsec transport mode to securely authenticate and encrypt using standard mTLS X.509 signatures
-cat << 'EOF' > /etc/ipsec.conf
-config setup
-    charondebug="ike 1, knl 1, cfg 0"
-    uniqueids=no
-
-conn %default
-    ikelifetime=60m
-    keylife=20m
-    rekeymargin=3m
-    keyingtries=1
-    keyexchange=ikev2
-
-conn tunnel
-    left=%defaultroute
-    leftcert=peer.crt
-    right=${worker_node_ip}
-    rightid=%any
-    type=transport
-    auto=start
-EOF
-
-cat << 'EOF' > /etc/ipsec.secrets
-: RSA peer.key
-EOF
-
-ipsec restart
+apt-get install -y iproute2 socat
 
 # Required Override: GCP's native metadata DNS resolver (169.254.169.254) is a link-local
 # IP that drops when encapsulated into the Geneve default route destined for the remote
@@ -66,9 +21,9 @@ ip route add 10.0.0.0/24 via $GATEWAY_IP dev ens4
 ip route del default || true
 ip route add default via 192.168.${tunnel_id}.1 dev geneve${tunnel_id}
 
-cat << 'EOF' > /home/admin/proxied_test.py
+cat << 'EOF' > /usr/local/bin/proxied_test.py
 ${python_daemon}
 EOF
 
-chmod +x /home/admin/proxied_test.py
-nohup env TUNNEL_ID=${tunnel_id} python3 /home/admin/proxied_test.py > /var/log/proxied_test.log 2>&1 &
+chmod +x /usr/local/bin/proxied_test.py
+nohup env TUNNEL_ID=${tunnel_id} python3 /usr/local/bin/proxied_test.py > /var/log/proxied_test.log 2>&1 &

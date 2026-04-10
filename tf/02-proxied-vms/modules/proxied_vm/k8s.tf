@@ -39,52 +39,7 @@ resource "kubernetes_deployment" "proxy" {
           }
 
           command = ["/bin/sh", "-c", <<EOF
-apt-get update && apt-get install -y iproute2 iptables socat procps strongswan
-
-mkdir -p /etc/ipsec.d/cacerts /etc/ipsec.d/certs /etc/ipsec.d/private
-
-cat << 'EOT' > /etc/ipsec.d/cacerts/ca.crt
-${var.ca_cert}
-EOT
-
-cat << 'EOT' > /etc/ipsec.d/certs/peer.crt
-${var.proxy_tls_cert}
-EOT
-
-cat << 'EOT' > /etc/ipsec.d/private/peer.key
-${var.proxy_tls_key}
-EOT
-
-chmod 600 /etc/ipsec.d/private/peer.key
-
-NODE_IP=$(ip route show default | head -n1 | awk '{print $5}' | xargs -I{} ip -4 -o addr show dev {} | awk '{print $4}' | cut -d/ -f1)
-
-cat << EOT > /etc/ipsec.conf
-config setup
-    charondebug="ike 1, knl 1, cfg 0"
-    uniqueids=no
-
-conn %default
-    ikelifetime=60m
-    keylife=20m
-    rekeymargin=3m
-    keyingtries=1
-    keyexchange=ikev2
-
-conn tunnel
-    left=\$NODE_IP
-    leftcert=peer.crt
-    right=${google_compute_address.proxied_vm_ip.address}
-    rightid=%any
-    type=transport
-    auto=start
-EOT
-
-cat << 'EOT' > /etc/ipsec.secrets
-: RSA peer.key
-EOT
-
-ipsec restart
+apt-get update && apt-get install -y iproute2 iptables socat procps
 
 ip link del geneve${var.tunnel_id} 2>/dev/null || true
 

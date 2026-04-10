@@ -38,10 +38,7 @@ variable "proxied_ports" {
   description = "List of network ports to expose and proxy to the VM."
 }
 
-variable "ssh_public_key" {
-  type        = string
-  description = "The OpenSSH formatted public key for the admin user."
-}
+
 
 variable "name_suffix" {
   type        = string
@@ -61,27 +58,4 @@ variable "tunnel_id" {
   description = "The Geneve tunnel ID and third octet for the overlay subnet."
 }
 
-variable "ca_cert" {
-  type        = string
-  description = "The CA certificate PEM string."
-}
 
-variable "vm_tls_cert" {
-  type        = string
-  description = "The VM client/server certificate PEM string."
-}
-
-variable "vm_tls_key" {
-  type        = string
-  description = "The VM private key PEM string."
-}
-
-variable "proxy_tls_cert" {
-  type        = string
-  description = "The Proxy client/server certificate PEM string."
-}
-
-variable "proxy_tls_key" {
-  type        = string
-  description = "The Proxy private key PEM string."
-}

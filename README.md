@@ -1,6 +1,11 @@
-# Scratchpad Example: Kubernetes Managed Isolated VM over mTLS Geneve Tunnel
+# Scratchpad Example: Kubernetes Managed Isolated VM over Geneve Tunnel
 
-This project is a scratchpad to explore integrating isolated Google Compute Engine (GCE) virtual machines into a Kubernetes cluster using a **Geneve Overlay Tunnel** secured entirely with **mutual TLS (mTLS)**.
+This project is a scratchpad to explore integrating isolated Google Compute Engine (GCE) virtual machines into a Kubernetes cluster using a **Geneve Overlay Tunnel**.
+
+## Security Architecture Note
+
+> [!IMPORTANT]
+> This implementation utilizes a pure L3 Geneve overlay tunnel without network-layer encryption (no IPsec or mTLS). Packets traversing between the Kubernetes worker node and the isolated virtual machines are transmitted as-is (unencrypted). All payload datagrams must be secured end-to-end at the application layer (e.g., using HTTPS, SSH, or application-native TLS).
 
 ## Architecture
 
@@ -15,14 +20,14 @@ The repository has two independent Terraform workspaces to cleanly isolate the l
 
 2. **`tf/02-proxied-vms/`**:
    - Ingests variables from the base workspace via `terraform_remote_state`.
-   - Generates an infrastructure-managed CA and unique client/server certificates using the `tls` provider (statelessly).
-   - Deploys proxy pods and isolated VMs to tunnel inbound payload traffic directly across the cluster over encrypted sockets.
+   - Generates an infrastructure-managed SSH key and micro-VM instances statelessly.
+   - Deploys proxy pods and isolated VMs to tunnel inbound payload traffic directly across the cluster over the overlay network.
 
 ---
 
 ## Traffic Flow and Network Architecture
 
-The following diagram illustrates how the isolated virtual machine integrates into the Kubernetes cluster via an TLS-encrypted Geneve overlay tunnel, routing both external ingress and direct egress entirely through the proxy pod on the worker node:
+The following diagram illustrates how the isolated virtual machine integrates into the Kubernetes cluster via a Geneve overlay tunnel, routing both external ingress and direct egress entirely through the proxy pod on the worker node:
 
 ```mermaid
 graph LR
@@ -34,7 +39,7 @@ graph LR
         subgraph Subnet [k8s-subnet]
             direction LR
             K8s_Node[Kubernetes Worker Node]
-            subgraph Overlay [Encrypted Geneve Tunnel]
+            subgraph Overlay [Pure Geneve Tunnel]
                 Proxy_Pod[Proxy Pod]
                 Proxied_VM[Isolated VM]
             end
@@ -45,7 +50,7 @@ graph LR
     Internet -->|LoadBalancer IP| GCP_LB
     GCP_LB -->|NodePort| K8s_Node
     K8s_Node -->|socat TCP-LISTEN| Proxy_Pod
-    Proxy_Pod -->|TLS Encrypted Geneve| Proxied_VM
+    Proxy_Pod -->|Geneve Datagram| Proxied_VM
 
     %% Outbound Traffic (Egress)
     Proxied_VM -->|Default Gateway| Proxy_Pod
@@ -54,9 +59,8 @@ graph LR
 
 ### Networking Components Breakdown
 
-- **Isolated VM Layer**: Runs a transparent IPsec transport mode configuration integrated directly with a Geneve overlay interface. 
-- **X.509 Certificate Authentication**: Both the Proxied VM and the Kubernetes Proxy Pod exclusively authenticate endpoints using statelessly generated mutual TLS (mTLS) X.509 certificates, securely managed and rotated directly by the Terraform `tls` provider framework.
-- **Kubernetes Proxy Layer**: Configured with `hostNetwork: true` to bind incoming node requests and transparently route payload traffic across the established overlay tunnel to the micro-VM.
+- **Isolated VM Layer**: Configured directly with a Geneve overlay interface utilizing the proxy pod as a transparent gateway.
+- **Kubernetes Proxy Layer**: Configured with `hostNetwork: true` to bind incoming node requests and route payload traffic across the established overlay tunnel to the micro-VM.
 - **Egress Masquerading**: All external requests originating from the VM default to utilizing the proxy pod's Geneve gateway interface, ensuring outbound calls correctly translate to the cluster's public egress address.
 
 ---

@@ -32,17 +32,13 @@ resource "google_compute_instance" "proxied_vm" {
     access_config {}
   }
 
-  metadata = {
-    "ssh-keys" = "admin:${var.ssh_public_key}"
-  }
+
 
   metadata_startup_script = templatefile("${path.module}/scripts/proxied_vm_startup.sh.tftpl", {
     worker_node_ip = var.worker_node_ip
     proxied_ports  = var.proxied_ports
     tunnel_id      = var.tunnel_id
-    ca_cert        = var.ca_cert
-    vm_tls_cert    = var.vm_tls_cert
-    vm_tls_key     = var.vm_tls_key
+
     python_daemon  = templatefile("${path.module}/scripts/proxied_test.py.tftpl", {
       tunnel_id     = var.tunnel_id
       proxied_ports = var.proxied_ports

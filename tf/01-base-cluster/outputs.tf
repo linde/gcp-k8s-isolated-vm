@@ -27,3 +27,7 @@ output "region" {
   value       = var.region
   description = "The GCP region hosting the infrastructure"
 }
+output "zone" {
+  value       = google_compute_instance.worker_node[0].zone
+  description = "The GCP zone where the Kubernetes worker node resides"
+}
