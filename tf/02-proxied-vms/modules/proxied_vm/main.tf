@@ -9,10 +9,7 @@ resource "google_compute_address" "proxied_vm_ip" {
   subnetwork   = var.subnetwork_id
 }
 
-resource "random_password" "ipsec_psk" {
-  length  = 32
-  special = false
-}
+
 
 resource "google_compute_instance" "proxied_vm" {
   name         = "${var.name_prefix}-${local.suffix}"
@@ -46,6 +43,5 @@ resource "google_compute_instance" "proxied_vm" {
     ca_cert        = var.ca_cert
     vm_tls_cert    = var.vm_tls_cert
     vm_tls_key     = var.vm_tls_key
-    ipsec_psk      = random_password.ipsec_psk.result
   })
 }

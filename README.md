@@ -4,7 +4,7 @@ This project is a scratchpad to explore integrating isolated Google Compute Engi
 
 ## Architecture
 
-The repository has been restructured into two independent Terraform workspaces to cleanly isolate the lifecycle of the base Kubernetes infrastructure from the proxied virtual machines:
+The repository has two independent Terraform workspaces to cleanly isolate the lifecycle of the base Kubernetes infrastructure from the proxied virtual machines:
 
 ### Workspaces:
 
@@ -20,10 +20,44 @@ The repository has been restructured into two independent Terraform workspaces t
 
 ---
 
-## Traffic Flow
+## Traffic Flow and Network Architecture
 
-- **Inbound (Ingress)**: External client -> Unencrypted LoadBalancer -> Kubernetes Proxy Pod (`socat TCP-LISTEN`) -> Encrypted Geneve Transport (`socat OPENSSL`) -> Target VM Decryption -> Local VM Application Loopback Listener.
-- **Outbound (Egress)**: Target VM Application -> Default Gateway over Overlay Interface -> Proxy Pod (NAT/Masquerade) -> Direct Internet Routing.
+The following diagram illustrates how the isolated virtual machine integrates into the Kubernetes cluster via an IPsec-encrypted Geneve overlay tunnel, routing both external ingress and direct egress entirely through the proxy pod on the worker node:
+
+```mermaid
+graph LR
+    Internet((Internet))
+
+    subgraph VPC [GCP VPC Network]
+        direction TB
+        GCP_LB[GCP External Load Balancer]
+        subgraph Subnet [k8s-subnet]
+            direction LR
+            K8s_Node[Kubernetes Worker Node]
+            subgraph Overlay [Encrypted Geneve Tunnel]
+                Proxy_Pod[Proxy Pod]
+                Proxied_VM[Isolated VM]
+            end
+        end
+    end
+
+    %% Inbound Traffic (Ingress)
+    Internet -->|LoadBalancer IP| GCP_LB
+    GCP_LB -->|NodePort| K8s_Node
+    K8s_Node -->|socat TCP-LISTEN| Proxy_Pod
+    Proxy_Pod -->|IPsec Encrypted Geneve| Proxied_VM
+
+    %% Outbound Traffic (Egress)
+    Proxied_VM -->|Default Gateway| Proxy_Pod
+    Proxy_Pod -->|NAT Masquerade| Internet
+```
+
+### Networking Components Breakdown
+
+- **Isolated VM Layer**: Runs a transparent IPsec transport mode configuration integrated directly with a Geneve overlay interface. 
+- **X.509 Certificate Authentication**: Both the Proxied VM and the Kubernetes Proxy Pod exclusively authenticate endpoints using statelessly generated mutual TLS (mTLS) X.509 certificates, securely managed and rotated directly by the Terraform `tls` provider framework.
+- **Kubernetes Proxy Layer**: Configured with `hostNetwork: true` to bind incoming node requests and transparently route payload traffic across the established overlay tunnel to the micro-VM.
+- **Egress Masquerading**: All external requests originating from the VM default to utilizing the proxy pod's Geneve gateway interface, ensuring outbound calls correctly translate to the cluster's public egress address.
 
 ---
 
@@ -59,8 +93,9 @@ export SSH_OPTS="-q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null 
 
 # you can watch the control plane boot with:
 ssh ${SSH_OPTS} admin@${CP_IP} "sudo journalctl -u google-startup-scripts.service -f" 
+# look for it to say: Kubernetes is already initialized.
 
-# then get a kubeconfig for the host:
+# then ctrl-c out, and get a kubeconfig for the host:
 ssh ${SSH_OPTS} admin@${CP_IP} "sudo cat /etc/kubernetes/admin.conf" > ${KUBECONFIG}
 ```
 
