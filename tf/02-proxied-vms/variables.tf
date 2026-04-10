@@ -10,7 +10,7 @@ variable "proxied_vms" {
     httpbin1 = [80, 8080]
     httpbin2 = [8888]
   }
-  description = "Mapping of VM name prefixes to lists of exposed ports."
+  description = "Mapping of VM name prefixes to lists of exposed ports. Note: the ports might land on a single node, so they must be unique across all proxied_vms"
 }
 
 

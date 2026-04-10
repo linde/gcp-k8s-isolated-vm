@@ -1,6 +1,6 @@
 #!/bin/bash
 apt-get update
-apt-get install -y iproute2 socat
+apt-get install -y iproute2
 
 # Required Override: GCP's native metadata DNS resolver (169.254.169.254) is a link-local
 # IP that drops when encapsulated into the Geneve default route destined for the remote
