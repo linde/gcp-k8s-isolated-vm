@@ -8,7 +8,7 @@ resource "tls_self_signed_cert" "ca" {
 
   subject {
     common_name  = "geneve-tunnel-ca"
-    organization = "Linde Corp Architecture"
+    organization = "geneve-tunnel-org"
   }
 
   validity_period_hours = 8760 # 1 year

@@ -86,7 +86,7 @@ class ProxiedHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.end_headers()
-            self.wfile.write(f'{{"message": "Successfully proxied ingress and egress over IPsec/Geneve tunnel", "origin_ip": "{origin_ip}", "httpbin_status": {status}}}\n'.encode('utf-8'))
+            self.wfile.write(f'{{"message": "Successfully proxied ingress and egress over Geneve tunnel", "origin_ip": "{origin_ip}", "httpbin_status": {status}}}\n'.encode('utf-8'))
             print("Successfully handled GET request and IPsec proxy hit.", flush=True)
         except Exception as e:
             self.send_response(500)

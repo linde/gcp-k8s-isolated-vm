@@ -106,10 +106,19 @@ terraform apply
 Find your LoadBalancer public endpoints and confirm traffic securely traverses the tunnel:
 
 ```bash
-# using the KUBECONFIG set above in tf/01-base-cluster 
-kubectl get svc
-```
-# use the external IP and ports from the service output corresponding
-# to the proxied_vms variable in tf/02-proxied-vms
-curl http://<EXTERNAL-IP>
+# Export the base cluster kubeconfig
+export KUBECONFIG=$(realpath ../01-base-cluster/kubeconfig)
+
+# Dynamically fetch all LoadBalancer IPs and their associated ports, then curl each endpoint automatically:
+kubectl get svc -o json | jq -r '
+  .items[] | 
+  select(.spec.type == "LoadBalancer") | 
+  .status.loadBalancer.ingress[0].ip as $ip | 
+  select($ip != null) | 
+  .spec.ports[] | 
+  "\($ip):\(.port)"
+' | while read -r endpoint; do
+  echo "Testing endpoint: http://${endpoint}"
+  curl -s "http://${endpoint}" | jq .
+done
 ```
