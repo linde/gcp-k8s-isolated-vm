@@ -14,7 +14,7 @@ output "worker_node_ip" {
 }
 
 output "kubeconfig_path" {
-  value       = abspath("${path.module}/.tmp/kubeconfig.yaml")
+  value       = abspath(local.kubeconfig_path)
   description = "Path to the generated kubeconfig file"
 }
 

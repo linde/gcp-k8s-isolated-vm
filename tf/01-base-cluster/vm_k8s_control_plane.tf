@@ -79,7 +79,8 @@ resource "random_string" "token_secret" {
 }
 
 locals {
-  kubeadm_token = "${random_string.token_id.result}.${random_string.token_secret.result}"
+  kubeadm_token   = "${random_string.token_id.result}.${random_string.token_secret.result}"
+  kubeconfig_path = "${path.module}/.tmp/kubeconfig.yaml"
 }
 
 # Block execution until kubeadm has finished initializing and securely download the resulting admin credential
@@ -95,7 +96,7 @@ resource "null_resource" "fetch_kubeconfig" {
       for i in {1..50}; do
         if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${path.module}/.tmp/vm_key admin@${google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip} "sudo test -f /etc/kubernetes/admin.conf"; then
           echo "Control plane initialized! Downloading Admin Kubeconfig..."
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${path.module}/.tmp/vm_key admin@${google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip} "sudo cat /etc/kubernetes/admin.conf" > ${path.module}/.tmp/kubeconfig.yaml
+          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${path.module}/.tmp/vm_key admin@${google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip} "sudo cat /etc/kubernetes/admin.conf" > ${local.kubeconfig_path}
           exit 0
         fi
         echo "Waiting for control plane initialization (Attempt $i of 50)..."
