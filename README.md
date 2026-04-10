@@ -1,97 +1,99 @@
-# K8s Managed Isolated VM via Geneve Tunnels
+# Scratchpad Example: Kubernetes Managed Isolated VM over mTLS Geneve Tunnel
 
-This project demonstrates how to manage ingress and egress for isolated VMs that reside outside of a Kubernetes cluster using **Geneve Overlay Tunnels**.
-
-The infrastructure is divided into two peer Terraform projects:
-1. **`01-base-cluster`**: Provisions the core GCP VPC network, subnets, firewall rules, and the Kubernetes cluster (one control plane node and worker nodes).
-2. **`02-proxied-vms`**: Provisions external, isolated VMs and integrates them securely into the Kubernetes cluster via Geneve tunneling and mutual TLS (mTLS).
+This project is a scratchpad to explore integrating isolated Google Compute Engine (GCE) virtual machines into a Kubernetes cluster using a **Geneve Overlay Tunnel** secured entirely with **mutual TLS (mTLS)**.
 
 ## Architecture
 
-In this architecture, the VM integrates into the cluster via a **Geneve Overlay Tunnel** (UDP port 6081). A privileged Proxy Pod sits inside the Kubernetes cluster acting as one end of the tunnel, and the VM acts as the other end.
+The repository has been restructured into two independent Terraform workspaces to cleanly isolate the lifecycle of the base Kubernetes infrastructure from the proxied virtual machines:
 
-- **Inbound (Ingress)**: Kubernetes LoadBalancer Service -> Proxy Pod -> Geneve Tunnel -> Proxied VM
-- **Outbound (Egress)**: Proxied VM -> Geneve Tunnel -> Proxy Pod (NAT Masquerade) -> Internet
+### Workspaces:
+
+1. **`tf/01-base-cluster/`**:
+   - Manages core networking (VPC, firewalls, internal subnets).
+   - Provisions the control plane and worker nodes.
+   - Configures local `outputs.tf` to export necessary networking state.
+
+2. **`tf/02-proxied-vms/`**:
+   - Ingests variables from the base workspace via `terraform_remote_state`.
+   - Generates an infrastructure-managed CA and unique client/server certificates using the `tls` provider (statelessly).
+   - Deploys proxy pods and isolated VMs to tunnel inbound payload traffic directly across the cluster over encrypted sockets.
+
+---
+
+## Traffic Flow
+
+- **Inbound (Ingress)**: External client -> Unencrypted LoadBalancer -> Kubernetes Proxy Pod (`socat TCP-LISTEN`) -> Encrypted Geneve Transport (`socat OPENSSL`) -> Target VM Decryption -> Local VM Application Loopback Listener.
+- **Outbound (Egress)**: Target VM Application -> Default Gateway over Overlay Interface -> Proxy Pod (NAT/Masquerade) -> Direct Internet Routing.
+
+---
 
 ## Getting Started
 
-Follow these steps to provision the base cluster first, followed by the proxied VMs.
+Deploying the complete environment follows a sequenced application workflow:
 
-### 1. Deploy Base Cluster (`01-base-cluster`)
+### 1. Provision the Base Cluster
 
-First, initialize and apply the base cluster configuration to provision the core networking and Kubernetes nodes:
+First setup some variables in a `terraform.tfvars` file or via params. You can see the available params in `variables.tf`. 
+
+> Note that because we dont do any air traffic control of node ports and vms, you need to ensure that you do not re-use any ports across your `proxied_vms` values. The default shows two vms getting built with two and one different port being exposed respectively.
 
 ```bash
 cd tf/01-base-cluster
 
 cat <<EOF > terraform.tfvars
-# required variable
 gcp_project = "your-gcp-project-id"
 EOF
-
-terraform init
-terraform apply
 ```
 
-Wait for the cluster to finish provisioning.
-
-### 2. Configure Local `kubeconfig`
-
-Once the base cluster is ready, generate your local `kubeconfig` to interact with it:
+Initialize and apply the core infrastructure first:
 
 ```bash
-# from within ./tf/01-base-cluster
+terraform init
+terraform apply
+
 export CP_IP=$(terraform output -raw control_plane_public_ip)
-export KUBECONFIG="$(pwd)/../../.tmp/kubeconfig.yaml"
 export SSH_KEY=$(terraform output -raw ssh_key_path)
+export KUBECONFIG="$(pwd)/.tmp/kubeconfig.yaml"
+
 export SSH_OPTS="-q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${SSH_KEY}"
 
-# Ensure startup scripts are complete on the control plane
-ssh ${SSH_OPTS} admin@${CP_IP} "sudo journalctl -u google-startup-scripts.service -f"
-# Break out with Ctrl-C when finished
+# you can watch the control plane boot with:
+ssh ${SSH_OPTS} admin@${CP_IP} "sudo journalctl -u google-startup-scripts.service -f" 
 
-# Download the admin kubeconfig
+# then get a kubeconfig for the host:
 ssh ${SSH_OPTS} admin@${CP_IP} "sudo cat /etc/kubernetes/admin.conf" > ${KUBECONFIG}
 ```
 
-### 3. Deploy Proxied VMs (`02-proxied-vms`)
+### 2. Provision the Application Layer (Proxied VMs)
 
-With the base network and cluster active, navigate to the `02-proxied-vms` directory to attach your external workloads:
+Deploy the unique application micro-VMs secured with mTLS:
 
 ```bash
 cd ../02-proxied-vms
 
-cat <<EOF > terraform.tfvars
-gcp_project = "your-gcp-project-id"
-EOF
+# Uses the same project ID from the base configuration
 
 terraform init
 terraform apply
 ```
 
-During `apply`, Terraform will automatically render the required Kubernetes proxy manifests and endpoint configurations to secure the Geneve tunnels with TLS.
+### 3. Apply Generated Manifests to Kubernetes
 
-### 4. Deploy Proxy Manifests
-
-Finally, deploy the configured proxy pods and load balancer services into the cluster:
+Terraform automatically renders manifests injected with the pre-shared TLS material into the local repository. Apply them using `kubectl`:
 
 ```bash
-kubectl apply -f ../.tmp/manifests/
+export KUBECONFIG="$(pwd)/../01-base-cluster/.tmp/kubeconfig.yaml"
+
+kubectl apply -f .tmp/manifests/
 ```
 
-### 5. Verify Connectivity
+### 4. Test Connectivity
 
-Check that the load balancer services acquire an `EXTERNAL-IP`:
+Find your LoadBalancer public endpoints and confirm traffic securely traverses the tunnel:
 
 ```bash
 kubectl get svc
+
+# Standard unencrypted queries to test the tunnel loopback translation
+curl http://<EXTERNAL-IP>
 ```
-
-For example, to set external access for your isolated VMs `httpbin1-svc`:
-
-```bash
-export EXTERNAL_IP=$(kubectl get svc httpbin1-svc -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-curl http://${EXTERNAL_IP}
-```
-
-

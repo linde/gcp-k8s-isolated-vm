@@ -39,6 +39,7 @@ resource "local_file" "proxied_pod_manifest" {
     proxied_vm_ip  = module.proxied_vm[each.key].proxied_vm_ip
     proxied_ports  = each.value
     tunnel_id      = 100 + index(sort(keys(var.proxied_vms)), each.key)
+    ipsec_psk      = module.proxied_vm[each.key].ipsec_psk
 
     # Inject mTLS parameters for inline heredoc rendering in the proxy pod startup script
     ca_cert        = tls_self_signed_cert.ca.cert_pem
