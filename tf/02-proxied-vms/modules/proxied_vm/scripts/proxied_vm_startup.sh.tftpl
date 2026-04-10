@@ -47,8 +47,9 @@ EOF
 
 ipsec restart
 
-# TODO: can we avoid this? dont like forcing config if we can avoid
-# Force DNS resolution over the Geneve default route
+# Required Override: GCP's native metadata DNS resolver (169.254.169.254) is a link-local
+# IP that drops when encapsulated into the Geneve default route destined for the remote
+# Kubernetes worker node. We must force global public DNS to ensure correct resolution across the tunnel.
 echo "nameserver 8.8.8.8" > /etc/resolv.conf
 
 sleep 10
@@ -66,48 +67,7 @@ ip route del default || true
 ip route add default via 192.168.${tunnel_id}.1 dev geneve${tunnel_id}
 
 cat << 'EOF' > /home/admin/proxied_test.py
-import http.server
-import socketserver
-import urllib.request
-import json
-import threading
-import time
-import os
-
-class ProxiedHandler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        try:
-            req = urllib.request.Request("http://httpbin.org/ip")
-            with urllib.request.urlopen(req) as response:
-                status = response.getcode()
-                body = response.read().decode('utf-8')
-                origin_ip = json.loads(body).get("origin", "unknown")
-            
-            self.send_response(200)
-            self.send_header("Content-type", "application/json")
-            self.end_headers()
-            self.wfile.write(f'{{"message": "Successfully proxied ingress and egress over Geneve tunnel", "origin_ip": "{origin_ip}", "httpbin_status": {status}}}\n'.encode('utf-8'))
-            print("Successfully handled GET request and IPsec proxy hit.", flush=True)
-        except Exception as e:
-            self.send_response(500)
-            self.send_header("Content-type", "application/json")
-            self.end_headers()
-            self.wfile.write(f'{{"error": "Proxy request failed", "details": "{str(e)}" }}\n'.encode('utf-8'))
-
-
-
-def run_server(port):
-    host_ip = "192.168.${tunnel_id}.2"
-    with socketserver.TCPServer((host_ip, port), ProxiedHandler) as httpd:
-        print(f"Serving internal payload traffic directly on overlay port {port}", flush=True)
-        httpd.serve_forever()
-
-ports = [${join(", ", proxied_ports)}]
-for p in ports:
-    threading.Thread(target=run_server, args=(p,), daemon=True).start()
-
-while True:
-    time.sleep(3600)
+${python_daemon}
 EOF
 
 chmod +x /home/admin/proxied_test.py
