@@ -44,6 +44,11 @@ variable "proxied_vms" {
     httpbin2 = [8888]
   }
   description = "Mapping of VM name prefixes to lists of exposed ports. Note: the ports might land on a single node, so they must be unique across all proxied_vms"
+
+  validation {
+    condition     = length(flatten(values(var.proxied_vms))) == length(distinct(flatten(values(var.proxied_vms))))
+    error_message = "All ports across all proxied_vms must be unique."
+  }
 }
 
 resource "random_id" "rand" {
