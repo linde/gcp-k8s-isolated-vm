@@ -122,6 +122,9 @@ kubectl get svc -o json | jq -r '
   "\($ip):\(.port)"
 ' | while read -r endpoint; do
   echo "Testing endpoint: http://${endpoint}"
-  curl -s "http://${endpoint}" | jq .
+  curl -s -S --connect-timeout 5 "http://${endpoint}" | jq .
 done
 ```
+
+One heads-up: the kubeconfig uses a short lived token. You might need to refresh it by running `terraform apply; export KUBECONFIG=$(terraform output -raw kubeconfig_path)` in the `tf/01-base-cluster` directory. 
+
