@@ -100,14 +100,3 @@ variable "unix_user" {
   description = "The Unix username to create on VMs for injected SSH keys."
 }
 
-
-###  output variables
-
-output "control_plane_public_ip" {
-  value = google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip
-}
-
-output "ssh_key_path" {
-  value       = abspath(local_file.private_key.filename)
-  description = "Path to the generated SSH private key"
-}
