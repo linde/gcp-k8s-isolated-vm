@@ -37,14 +37,14 @@ resource "google_compute_instance" "cp_node" {
   metadata_startup_script = templatefile("${path.module}/templates/bootstrap.sh.tftpl", {
     k8s_version      = var.k8s_version
     k8s_service_cidr = ""
-    k8s_pod_cidr     = "192.168.0.0/16"
+    k8s_pod_cidr     = var.k8s_pod_cidr
     cp_public_ip     = google_compute_address.cp_static_ip.address
     cp_join_ip       = ""
     is_control_plane = true
     ipv6_enabled     = false
     kubeadm_token    = local.kubeadm_token
     ccm_yaml = templatefile("${path.module}/templates/ccm.yaml.tftpl", {
-      cluster_cidr = "192.168.0.0/16"
+      cluster_cidr = var.k8s_pod_cidr
     })
     proxied_vm_ips = []
   })

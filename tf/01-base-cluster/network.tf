@@ -46,7 +46,7 @@ resource "google_compute_firewall" "allow_internal_all" {
 
   source_ranges = [
     google_compute_subnetwork.k8s_subnet.ip_cidr_range,
-    "192.168.0.0/16"
+    var.k8s_pod_cidr
   ]
 }
 
@@ -100,7 +100,7 @@ resource "google_compute_firewall" "allow_http" {
 resource "google_compute_route" "pod_cidr_route" {
   name             = "pod-cidr-${local.rand_suffix}"
   network          = google_compute_network.k8s.id
-  dest_range       = "192.168.0.0/16"
+  dest_range       = var.k8s_pod_cidr
   next_hop_instance = google_compute_instance.worker_node[0].self_link
   priority         = 1000
 }

@@ -88,6 +88,12 @@ variable "proxied_vm_ips" {
   description = "Static IPs of all proxied VMs to target for Geneve tunnels."
 }
 
+variable "k8s_pod_cidr" {
+  type        = string
+  default     = "192.168.0.0/16"
+  description = "The CIDR range for the Kubernetes pods."
+}
+
 
 ###  output variables
 
