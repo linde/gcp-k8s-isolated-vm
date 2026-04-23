@@ -126,8 +126,36 @@ curl -s -S --connect-timeout 5 "http://${endpoint}?url=https://google.com" | jq 
 
 One heads-up: the kubeconfig uses a short lived token. You might need to refresh it by running `terraform apply; export KUBECONFIG=$(terraform output -raw kubeconfig_path)` in the `tf/01-base-cluster` directory. 
 
-### TODO
+### 4. Provision and Test Agent Gateway (Egress Governance)
 
-* TODO variable "proxied_vm_ips" should be dynamic based on the number of vms being created from the params
+Deploy the Agent Gateway infrastructure to govern egress traffic from the workloads:
+
+```bash
+cd ../03-agent-gateway
+
+terraform init
+terraform apply
+```
+
+To test the gateway, set an environment variable for the Gateway IP:
+
+```bash
+export AGENTGW=$(kubectl get gateway -A -o jsonpath='{.items[?(@.metadata.name=="egress-gateway")].status.addresses[0].value}')
+```
+
+Using the default policy supply in the local helm chart, verify that traffic to `httpbin.org` is allowed:
+
+```bash
+curl http://${AGENTGW}/?url=http://httpbin.org/ip
+```
+Expected output: Success (200 OK) with proxied response.
+
+Next, verify that traffic to `icanhazip.com` is blocked:
+
+```bash
+curl -v "http://${AGENTGW}/?url=http://icanhazip.com"
+```
+Expected output: Failure (500 Internal Server Error) with `HTTP Error 403: Forbidden`.
+
 
 

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: egress-policy
+description: A Helm chart to deploy egress policy for httpbin workloads
+version: 0.1.3
+appVersion: "1.0.0"
