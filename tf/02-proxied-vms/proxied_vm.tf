@@ -8,7 +8,7 @@ locals {
 
 module "proxied_vm" {
   source         = "./modules/proxied_vm"
-  for_each       = var.proxied_vms 
+  for_each       = data.terraform_remote_state.base.outputs.proxied_vms 
 
   gcp_project    = data.terraform_remote_state.base.outputs.gcp_project
   region         = data.terraform_remote_state.base.outputs.region
@@ -21,7 +21,7 @@ module "proxied_vm" {
 
   name_prefix    = each.key 
   name_suffix    = local.rand_suffix
-  tunnel_id      = 100 + index(sort(keys(var.proxied_vms)), each.key)
+  tunnel_id      = 100 + index(sort(keys(data.terraform_remote_state.base.outputs.proxied_vms)), each.key)
   static_ip      = data.terraform_remote_state.base.outputs.proxied_vm_static_ips[each.key]
   ssh_public_key = data.terraform_remote_state.base.outputs.vm_ssh_public_key
 }

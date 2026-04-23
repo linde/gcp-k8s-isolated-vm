@@ -31,23 +31,23 @@ variable "os_image" {
 }
 
 variable "k8s_subnet_cidr" {
+  description = "The CIDR range for the Kubernetes subnet."
   type        = string
   default     = "10.0.0.0/24"
-  description = "The CIDR range for the Kubernetes subnet."
 }
 
-## NB: 
 variable "proxied_vms" {
-  type        = map(list(number))
-  default     = {
-    httpbin1 = [80, 8080]
-    httpbin2 = [8888]
+  description = "Mapping of VM name prefixes to lists of exposed ports"
+  type = map(list(number))
+  default = {
+    httpbin1 = [8080]
+    httpbin2 = [8080, 8888]
   }
-  description = "Mapping of VM name prefixes to lists of exposed ports. Note: the ports might land on a single node, so they must be unique across all proxied_vms"
-
   validation {
-    condition     = length(flatten(values(var.proxied_vms))) == length(distinct(flatten(values(var.proxied_vms))))
-    error_message = "All ports across all proxied_vms must be unique."
+    condition = alltrue([
+      for ports in var.proxied_vms : length(ports) == length(distinct(ports))
+    ])
+    error_message = "Duplicates are not allowed in the list of ports for a given VM"
   }
 }
 

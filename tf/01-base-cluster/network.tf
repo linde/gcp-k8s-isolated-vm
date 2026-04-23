@@ -29,7 +29,7 @@ resource "google_compute_address" "proxied_vm_static_ip" {
   address_type = "INTERNAL"
   subnetwork   = google_compute_subnetwork.k8s_subnet.id
 
-  depends_on   = [time_sleep.wait_for_services]
+  depends_on = [time_sleep.wait_for_services]
 }
 
 # Allow ALL internal traffic within the subnet CIDR (all ports/protocols)
@@ -53,9 +53,9 @@ resource "google_compute_firewall" "allow_internal_all" {
 
 # Allow SSH and K8s API access from anywhere (for management)
 resource "google_compute_firewall" "allow_management" {
-  name    = "allow-management-${local.rand_suffix}"
-  project = var.gcp_project
-  network = google_compute_network.k8s.id
+  name        = "allow-management-${local.rand_suffix}"
+  project     = var.gcp_project
+  network     = google_compute_network.k8s.id
   target_tags = ["k8s-cp"]
 
   allow {
@@ -70,9 +70,9 @@ resource "google_compute_firewall" "allow_management" {
 
 # Allow external load balancer HTTP ingress traffic to the K8s worker node instances
 resource "google_compute_firewall" "allow_http" {
-  name    = "allow-http-${local.rand_suffix}"
-  project = var.gcp_project
-  network = google_compute_network.k8s.id
+  name        = "allow-http-${local.rand_suffix}"
+  project     = var.gcp_project
+  network     = google_compute_network.k8s.id
   target_tags = ["k8s-node"]
 
   allow {
@@ -85,11 +85,11 @@ resource "google_compute_firewall" "allow_http" {
 
 # Route Pod CIDR via the worker node so the Proxied VM can address the Proxy Pod directly
 resource "google_compute_route" "pod_cidr_route" {
-  name             = "pod-cidr-${local.rand_suffix}"
-  network          = google_compute_network.k8s.id
-  dest_range       = var.k8s_pod_cidr
+  name              = "pod-cidr-${local.rand_suffix}"
+  network           = google_compute_network.k8s.id
+  dest_range        = var.k8s_pod_cidr
   next_hop_instance = google_compute_instance.worker_node[0].self_link
-  priority         = 1000
+  priority          = 1000
 }
 
 
