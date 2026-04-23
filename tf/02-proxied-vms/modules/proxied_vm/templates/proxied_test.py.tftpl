@@ -1,6 +1,7 @@
 import http.server
 import socketserver
 import urllib.request
+import urllib.parse
 import json
 import threading
 import time
@@ -9,17 +10,20 @@ import os
 class ProxiedHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            req = urllib.request.Request("http://httpbin.org/ip")
+            query = urllib.parse.urlparse(self.path).query
+            params = urllib.parse.parse_qs(query)
+            url = params.get('url', ['http://httpbin.org/ip'])[0]
+            
+            req = urllib.request.Request(url)
             with urllib.request.urlopen(req) as response:
                 status = response.getcode()
                 body = response.read().decode('utf-8')
-                origin_ip = json.loads(body).get("origin", "unknown")
             
             self.send_response(200)
             self.send_header("Content-type", "application/json")
             self.end_headers()
-            self.wfile.write(f'{{"message": "Successfully proxied ingress and egress over Geneve tunnel", "origin_ip": "{origin_ip}", "httpbin_status": {status}}}\n'.encode('utf-8'))
-            print("Successfully handled GET request and IPsec proxy hit.", flush=True)
+            self.wfile.write(f'{{"message": "Successfully proxied ingress and egress", "target_url": "{url}", "body": {json.dumps(body)}, "status": {status}}}\n'.encode('utf-8'))
+            print(f"Successfully handled GET request for {url}", flush=True)
         except Exception as e:
             self.send_response(500)
             self.send_header("Content-type", "application/json")

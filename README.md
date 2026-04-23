@@ -119,6 +119,9 @@ for endpoint in ${ENDPOINTS}; do
   curl -s -S --connect-timeout 5 "http://${endpoint}" | jq .
 done
 
+# the service will default to httpbin.org, but you can pass in a different target via the url param
+curl -s -S --connect-timeout 5 "http://${endpoint}?url=https://google.com" | jq .
+
 ```
 
 One heads-up: the kubeconfig uses a short lived token. You might need to refresh it by running `terraform apply; export KUBECONFIG=$(terraform output -raw kubeconfig_path)` in the `tf/01-base-cluster` directory. 
