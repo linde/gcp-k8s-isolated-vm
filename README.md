@@ -130,5 +130,7 @@ One heads-up: the kubeconfig uses a short lived token. You might need to refresh
 
 ### TODO
 
-* 
+* TODO variable "proxied_vm_ips" should be dynamic based on the number of vms being created from the params
+* TODO can we avoid the pod port uniqueness constraint across vms now that we're not using the host network?
+
 
