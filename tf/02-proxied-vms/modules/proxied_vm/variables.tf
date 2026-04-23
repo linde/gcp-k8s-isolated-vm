@@ -58,4 +58,14 @@ variable "tunnel_id" {
   description = "The Geneve tunnel ID and third octet for the overlay subnet."
 }
 
+variable "ssh_public_key" {
+  type        = string
+  description = "The public SSH key to authorize on the proxied VM."
+}
+
+variable "static_ip" {
+  type        = string
+  description = "The pre-allocated static internal IP for the proxied VM."
+}
+
 

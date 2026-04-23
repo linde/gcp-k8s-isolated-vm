@@ -13,13 +13,13 @@ GATEWAY_IP=$(ip route show default | awk '{print $3}')
 WORKER_IP="${worker_node_ip}"
 
 ip link add name geneve${tunnel_id} type geneve id ${tunnel_id} remote $WORKER_IP
-ip addr add 192.168.${tunnel_id}.2/24 dev geneve${tunnel_id}
+ip addr add ${vm_tunnel_ip}/24 dev geneve${tunnel_id}
 ip link set geneve${tunnel_id} up
 
 ip route add $WORKER_IP via $GATEWAY_IP dev ens4
 ip route add 10.0.0.0/24 via $GATEWAY_IP dev ens4
 ip route del default || true
-ip route add default via 192.168.${tunnel_id}.1 dev geneve${tunnel_id}
+ip route add default via ${gw_tunnel_ip} dev geneve${tunnel_id}
 
 cat << 'EOF' > /usr/local/bin/proxied_test.py
 ${python_daemon}

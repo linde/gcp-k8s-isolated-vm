@@ -82,6 +82,12 @@ variable "inbound_node_port" {
   }
 }
 
+variable "proxied_vm_ips" {
+  type        = list(string)
+  default     = ["10.0.0.2", "10.0.0.3"]
+  description = "Static IPs of all proxied VMs to target for Geneve tunnels."
+}
+
 
 ###  output variables
 

@@ -34,7 +34,7 @@ resource "google_compute_instance" "cp_node" {
   }
 
   # Use templatefile for cleaner, idiomatic bootstrap scripts
-  metadata_startup_script = templatefile("${path.module}/scripts/bootstrap.sh.tftpl", {
+  metadata_startup_script = templatefile("${path.module}/templates/bootstrap.sh.tftpl", {
     k8s_version      = var.k8s_version
     k8s_service_cidr = ""
     k8s_pod_cidr     = "192.168.0.0/16"
@@ -43,10 +43,10 @@ resource "google_compute_instance" "cp_node" {
     is_control_plane = true
     ipv6_enabled     = false
     kubeadm_token    = local.kubeadm_token
-    ccm_yaml = templatefile("${path.module}/scripts/ccm.yaml.tftpl", {
+    ccm_yaml = templatefile("${path.module}/templates/ccm.yaml.tftpl", {
       cluster_cidr = "192.168.0.0/16"
     })
-    proxied_vm_ip = ""
+    proxied_vm_ips = []
   })
 
   # Remove node from cluster on destroy so we clean up cloud controller managed GCP resources

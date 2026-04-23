@@ -29,12 +29,12 @@ class ProxiedHandler(http.server.BaseHTTPRequestHandler):
 
 
 def run_server(port):
-    host_ip = "192.168.${tunnel_id}.2"
+    host_ip = "${bind_address}"
     with socketserver.TCPServer((host_ip, port), ProxiedHandler) as httpd:
         print(f"Serving internal payload traffic directly on overlay port {port}", flush=True)
         httpd.serve_forever()
 
-ports = [${join(", ", proxied_ports)}]
+ports = json.loads("${proxied_ports}")  # this is going via json so we dont have a IDE parse error
 for p in ports:
     threading.Thread(target=run_server, args=(p,), daemon=True).start()
 

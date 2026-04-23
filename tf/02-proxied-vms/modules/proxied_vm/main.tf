@@ -1,13 +1,11 @@
 locals {
   suffix = var.name_suffix != "" ? var.name_suffix : "default"
+  vm_tunnel_ip = "192.168.${var.tunnel_id}.2"
+  gw_tunnel_ip = "192.168.${var.tunnel_id}.1"
+  tunnel_cidr  = "192.168.${var.tunnel_id}.0/24"
 }
 
-resource "google_compute_address" "proxied_vm_ip" {
-  name         = "${var.name_prefix}-ip-${local.suffix}"
-  region       = var.region
-  address_type = "INTERNAL"
-  subnetwork   = var.subnetwork_id
-}
+
 
 
 
@@ -17,6 +15,11 @@ resource "google_compute_instance" "proxied_vm" {
   machine_type = "e2-micro"
   zone         = var.zone
   tags         = ["k8s-node"]
+
+  metadata = {
+    # TODO reconcile this with the other "admin" users (or remove)
+    ssh-keys = "debian:${var.ssh_public_key}"
+  }
 
   boot_disk {
     initialize_params {
@@ -28,22 +31,25 @@ resource "google_compute_instance" "proxied_vm" {
   network_interface {
     network    = var.network_id
     subnetwork = var.subnetwork_id
-    network_ip = google_compute_address.proxied_vm_ip.address
+    network_ip = var.static_ip
     access_config {}
   }
 
 
 
-  metadata_startup_script = templatefile("${path.module}/scripts/proxied_vm_startup.sh.tftpl", {
+  metadata_startup_script = templatefile("${path.module}/templates/proxied_vm_startup.sh.tftpl", {
     worker_node_ip = var.worker_node_ip
     proxied_ports  = var.proxied_ports
     tunnel_id      = var.tunnel_id
+    vm_tunnel_ip   = local.vm_tunnel_ip
+    gw_tunnel_ip   = local.gw_tunnel_ip
 
-    python_daemon  = templatefile("${path.module}/scripts/proxied_test.py.tftpl", {
-      tunnel_id     = var.tunnel_id
-      proxied_ports = var.proxied_ports
+    python_daemon  = templatefile("${path.module}/templates/proxied_test.py.tftpl", {
+      bind_address  = local.vm_tunnel_ip
+      proxied_ports = jsonencode(var.proxied_ports)
     })
   })
 }
+
 
 

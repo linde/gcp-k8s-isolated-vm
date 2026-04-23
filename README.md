@@ -128,3 +128,7 @@ done
 
 One heads-up: the kubeconfig uses a short lived token. You might need to refresh it by running `terraform apply; export KUBECONFIG=$(terraform output -raw kubeconfig_path)` in the `tf/01-base-cluster` directory. 
 
+### TODO
+
+* TODO proxied vm startup L20 has hardcoded cidr 10.0.0.0/24
+

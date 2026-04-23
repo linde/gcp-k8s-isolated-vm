@@ -22,6 +22,8 @@ module "proxied_vm" {
   name_prefix    = each.key 
   name_suffix    = local.rand_suffix
   tunnel_id      = 100 + index(sort(keys(var.proxied_vms)), each.key)
+  static_ip      = data.terraform_remote_state.base.outputs.proxied_vm_static_ips[each.key]
+  ssh_public_key = data.terraform_remote_state.base.outputs.vm_ssh_public_key
 }
 
 

@@ -28,32 +28,29 @@ resource "kubernetes_deployment" "proxy" {
       }
 
       spec {
-        host_network = true
+        host_network = false
 
         container {
           name  = "proxy"
-          image = "debian:bookworm-slim"
+          # Using kube-proxy image NOT for its functionality, but because it contains iptables tools.
+          image = "registry.k8s.io/kube-proxy:v1.32.13"
 
           security_context {
             privileged = true
           }
 
+          dynamic "port" {
+            for_each = var.proxied_ports
+            content {
+              container_port = port.value
+            }
+          }
+
           command = ["/bin/sh", "-c", <<EOF
-apt-get update && apt-get install -y iproute2 iptables socat procps
-
-ip link del geneve${var.tunnel_id} 2>/dev/null || true
-
-ip link add name geneve${var.tunnel_id} type geneve id ${var.tunnel_id} remote ${google_compute_address.proxied_vm_ip.address}
-ip addr add 192.168.${var.tunnel_id}.1/24 dev geneve${var.tunnel_id}
-ip link set geneve${var.tunnel_id} up
-
-sysctl -w net.ipv4.ip_forward=1
-iptables -t nat -A POSTROUTING -s 192.168.${var.tunnel_id}.0/24 -o ens4 -j MASQUERADE
-
-%{ for p in var.proxied_ports ~}
-socat TCP-LISTEN:${p},reuseaddr,fork TCP:192.168.${var.tunnel_id}.2:${p} &
-%{ endfor ~}
-wait
+echo 1 > /proc/sys/net/ipv4/ip_forward
+iptables -t nat -A PREROUTING -p tcp -j DNAT --to-destination ${local.vm_tunnel_ip}
+iptables -t nat -A POSTROUTING -p tcp -d ${local.vm_tunnel_ip} -j MASQUERADE
+while true; do sleep 3600; done
 EOF
           ]
         }
@@ -85,3 +82,5 @@ resource "kubernetes_service" "proxy" {
     }
   }
 }
+
+

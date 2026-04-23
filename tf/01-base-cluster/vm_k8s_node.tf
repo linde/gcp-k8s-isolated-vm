@@ -33,7 +33,7 @@ resource "google_compute_instance" "worker_node" {
   }
 
   # Use templatefile with the join command captured via SSH
-  metadata_startup_script = templatefile("${path.module}/scripts/bootstrap.sh.tftpl", {
+  metadata_startup_script = templatefile("${path.module}/templates/bootstrap.sh.tftpl", {
     k8s_version      = var.k8s_version
     k8s_service_cidr = ""
     k8s_pod_cidr     = "192.168.0.0/16"
@@ -43,7 +43,7 @@ resource "google_compute_instance" "worker_node" {
     ipv6_enabled     = false
     kubeadm_token    = local.kubeadm_token
     ccm_yaml         = ""
-    proxied_vm_ip     = ""
+    proxied_vm_ips    = values(google_compute_address.proxied_vm_static_ip)[*].address
   })
 
   # Remove node from cluster on destroy so we clean up cloud controller managed GCP resources

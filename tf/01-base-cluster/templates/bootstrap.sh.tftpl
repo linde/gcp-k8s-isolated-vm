@@ -135,7 +135,10 @@ if [ ! -f /etc/kubernetes/admin.conf ]; then
     --set k8s.requireIPv4PodCIDR=true \
     --set endpointRoutes.enabled=true \
     --set gcp.enabled=true \
-    --set autoDirectNodeRoutes=true
+    --set autoDirectNodeRoutes=true \
+    --set direct-routing-skip-unreachable=true \
+    --set bpf.hostLegacyRouting=false \
+    --set kubeProxyReplacement=true
 %{ endif }
 
   echo ">>> Kubernetes cluster initialized with Cilium (Helm)!"
@@ -157,9 +160,22 @@ EOF
 fi
 %{ else }
 # Configure NAT for Proxied VM egress
-echo ">>> Configuring NAT for Proxied VM (${proxied_vm_ip})..."
+echo ">>> Configuring NAT for Proxied VMs..."
 ACTIVE_IFACE=$(ip route get 8.8.8.8 | grep -Po '(?<=dev )(\S+)')
-sudo iptables -t nat -I POSTROUTING 1 -s ${proxied_vm_ip}/32 -o $ACTIVE_IFACE -j MASQUERADE
+sudo iptables -t nat -I POSTROUTING 1 -s 192.168.0.0/16 -o $ACTIVE_IFACE -j MASQUERADE
+sudo iptables -A FORWARD -p tcp --tcp-flags SYN,RST SYN -d 192.168.0.0/16 -j TCPMSS --clamp-mss-to-pmtu
+
+# Create Geneve tunnels for all Proxied VMs
+echo ">>> Creating Geneve tunnels for all Proxied VMs..."
+index=0
+for vm_ip in ${join(" ", proxied_vm_ips)}; do
+  tunnel_id=$((100 + index))
+  ip link del geneve$tunnel_id 2>/dev/null || true
+  ip link add name geneve$tunnel_id type geneve id $tunnel_id remote $vm_ip
+  ip addr add 192.168.$tunnel_id.1/24 dev geneve$tunnel_id
+  ip link set geneve$tunnel_id up
+  index=$((index + 1))
+done
 
 if [ ! -f /etc/kubernetes/kubelet.conf ]; then
   echo ">>> Joining Kubernetes cluster (with retries)..."

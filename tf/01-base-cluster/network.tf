@@ -22,6 +22,16 @@ resource "google_compute_address" "cp_static_ip" {
   depends_on = [time_sleep.wait_for_services]
 }
 
+resource "google_compute_address" "proxied_vm_static_ip" {
+  for_each     = var.proxied_vms
+  name         = "${each.key}-ip-${local.rand_suffix}"
+  region       = var.region
+  address_type = "INTERNAL"
+  subnetwork   = google_compute_subnetwork.k8s_subnet.id
+
+  depends_on   = [time_sleep.wait_for_services]
+}
+
 # Allow ALL internal traffic within the subnet CIDR (all ports/protocols)
 resource "google_compute_firewall" "allow_internal_all" {
   name      = "allow-internal-all-${local.rand_suffix}"
@@ -51,6 +61,21 @@ resource "google_compute_firewall" "allow_management" {
   allow {
     protocol = "tcp"
     ports    = ["22", "6443"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+}
+
+# Allow SSH to K8s worker node instances
+resource "google_compute_firewall" "allow_ssh_node" {
+  name    = "allow-ssh-node-${local.rand_suffix}"
+  project = var.gcp_project
+  network = google_compute_network.k8s.id
+  target_tags = ["k8s-node"]
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22"]
   }
 
   source_ranges = ["0.0.0.0/0"]
