@@ -30,7 +30,7 @@ resource "google_compute_instance" "cp_node" {
 
   # Injects the public key we generated into the VM
   metadata = {
-    "ssh-keys" = "admin:${tls_private_key.vm_ssh_key.public_key_openssh}"
+    "ssh-keys" = "${var.unix_user}:${tls_private_key.vm_ssh_key.public_key_openssh}"
   }
 
   # Use templatefile for cleaner, idiomatic bootstrap scripts

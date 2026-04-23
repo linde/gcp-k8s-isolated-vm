@@ -94,6 +94,12 @@ variable "k8s_pod_cidr" {
   description = "The CIDR range for the Kubernetes pods."
 }
 
+variable "unix_user" {
+  type        = string
+  default     = "admin"
+  description = "The Unix username to create on VMs for injected SSH keys."
+}
+
 
 ###  output variables
 

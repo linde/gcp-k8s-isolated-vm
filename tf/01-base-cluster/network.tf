@@ -66,20 +66,7 @@ resource "google_compute_firewall" "allow_management" {
   source_ranges = ["0.0.0.0/0"]
 }
 
-# Allow SSH to K8s worker node instances
-resource "google_compute_firewall" "allow_ssh_node" {
-  name    = "allow-ssh-node-${local.rand_suffix}"
-  project = var.gcp_project
-  network = google_compute_network.k8s.id
-  target_tags = ["k8s-node"]
 
-  allow {
-    protocol = "tcp"
-    ports    = ["22"]
-  }
-
-  source_ranges = ["0.0.0.0/0"]
-}
 
 # Allow external load balancer HTTP ingress traffic to the K8s worker node instances
 resource "google_compute_firewall" "allow_http" {

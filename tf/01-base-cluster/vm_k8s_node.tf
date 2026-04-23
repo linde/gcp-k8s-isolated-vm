@@ -28,7 +28,7 @@ resource "google_compute_instance" "worker_node" {
 
   # Injects the public key we generated into the VM
   metadata = {
-    "ssh-keys" = "admin:${tls_private_key.vm_ssh_key.public_key_openssh}"
+    "ssh-keys" = "${var.unix_user}:${tls_private_key.vm_ssh_key.public_key_openssh}"
     "cp-ip"    = google_compute_address.cp_static_ip.address
   }
 
