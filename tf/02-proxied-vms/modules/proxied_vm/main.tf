@@ -43,6 +43,7 @@ resource "google_compute_instance" "proxied_vm" {
     tunnel_id      = var.tunnel_id
     vm_tunnel_ip   = local.vm_tunnel_ip
     gw_tunnel_ip   = local.gw_tunnel_ip
+    k8s_subnet_cidr = var.k8s_subnet_cidr
 
     python_daemon  = templatefile("${path.module}/templates/proxied_test.py.tftpl", {
       bind_address  = local.vm_tunnel_ip

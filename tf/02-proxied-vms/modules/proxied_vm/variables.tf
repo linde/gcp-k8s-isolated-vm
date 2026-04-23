@@ -68,4 +68,10 @@ variable "static_ip" {
   description = "The pre-allocated static internal IP for the proxied VM."
 }
 
+variable "k8s_subnet_cidr" {
+  type        = string
+  default     = "10.0.0.0/24"
+  description = "The CIDR range for the Kubernetes subnet."
+}
+
 
