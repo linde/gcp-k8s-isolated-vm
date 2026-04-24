@@ -74,4 +74,11 @@ variable "k8s_subnet_cidr" {
   description = "The CIDR range for the Kubernetes subnet."
 }
 
+variable "egress_proxy_url" {
+  type        = string
+  default     = ""
+  description = "The HTTP proxy URL to force for egress traffic on the proxy container."
+}
+
+
 

@@ -39,6 +39,14 @@ resource "kubernetes_deployment" "proxy" {
             privileged = true
           }
 
+          dynamic "env" {
+            for_each = var.egress_proxy_url != "" ? ["HTTP_PROXY", "HTTPS_PROXY"] : []
+            content {
+              name  = env.value
+              value = var.egress_proxy_url
+            }
+          }
+
           dynamic "port" {
             for_each = var.proxied_ports
             content {

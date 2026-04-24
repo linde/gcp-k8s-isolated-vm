@@ -28,6 +28,11 @@ output "proxied_vms" {
   value       = var.proxied_vms
 }
 
+output "rand_suffix" {
+  description = "Random suffix generated for resource naming"
+  value       = random_id.rand.hex
+}
+
 output "region" {
   description = "The GCP region hosting the infrastructure"
   value       = var.region
