@@ -44,7 +44,8 @@ resource "google_compute_instance" "cp_node" {
     ipv6_enabled     = false
     kubeadm_token    = local.kubeadm_token
     ccm_yaml = templatefile("${path.module}/templates/ccm.yaml.tftpl", {
-      cluster_cidr = var.k8s_pod_cidr
+      cluster_cidr    = var.k8s_pod_cidr
+      subnetwork_name = google_compute_subnetwork.k8s_subnet.name
     })
     proxied_vm_ips = []
   })

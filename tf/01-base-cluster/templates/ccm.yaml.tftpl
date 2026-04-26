@@ -17,6 +17,19 @@ subjects:
   name: cloud-controller-manager
   namespace: kube-system
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:cloud-provider
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: cloud-provider
+  namespace: kube-system
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -26,6 +39,7 @@ data:
   gce.conf: |
     [Global]
     node-tags = k8s-node
+    subnetwork = ${subnetwork_name}
 ---
 apiVersion: apps/v1
 kind: DaemonSet

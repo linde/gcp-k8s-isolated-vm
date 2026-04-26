@@ -16,4 +16,6 @@
 
 - Dont change execution because of TODOs you see in markdown files. I write them there to revisit them and not distract from current execution.  If you pull them in we end up muddying our efforts across concerns.
 
+- You're allowed to read files under .tmp directories even though their excluded from source control.
+
 - Have fun, this is cool stuff!
