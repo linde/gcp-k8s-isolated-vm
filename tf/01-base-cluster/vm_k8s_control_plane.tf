@@ -87,9 +87,6 @@ locals {
 resource "null_resource" "fetch_kubeconfig" {
   depends_on = [google_compute_instance.cp_node]
 
-  triggers = {
-    always_run = timestamp()
-  }
 
   provisioner "local-exec" {
     command = <<EOT
