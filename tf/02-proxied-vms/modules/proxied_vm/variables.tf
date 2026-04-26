@@ -38,8 +38,6 @@ variable "proxied_ports" {
   description = "List of network ports to expose and proxy to the VM."
 }
 
-
-
 variable "name_suffix" {
   type        = string
   default     = ""
@@ -63,14 +61,10 @@ variable "ssh_public_key" {
   description = "The public SSH key to authorize on the proxied VM."
 }
 
-variable "static_ip" {
-  type        = string
-  description = "The pre-allocated static internal IP for the proxied VM."
-}
+
 
 variable "k8s_subnet_cidr" {
   type        = string
-  default     = "10.0.0.0/24"
   description = "The CIDR range for the Kubernetes subnet."
 }
 
@@ -79,6 +73,7 @@ variable "egress_proxy_url" {
   default     = ""
   description = "The HTTP proxy URL to force for egress traffic on the proxy container."
 }
-
-
-
+variable "ssh_private_key_path" {
+  type        = string
+  description = "Path to the private SSH key used to connect to the worker node."
+}

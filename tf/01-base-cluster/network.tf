@@ -22,15 +22,7 @@ resource "google_compute_address" "cp_static_ip" {
   depends_on = [time_sleep.wait_for_services]
 }
 
-resource "google_compute_address" "proxied_vm_static_ip" {
-  for_each     = var.proxied_vms
-  name         = "${each.key}-ip-${local.rand_suffix}"
-  region       = var.region
-  address_type = "INTERNAL"
-  subnetwork   = google_compute_subnetwork.k8s_subnet.id
 
-  depends_on = [time_sleep.wait_for_services]
-}
 
 # Allow ALL internal traffic within the subnet CIDR (all ports/protocols)
 resource "google_compute_firewall" "allow_internal_all" {
@@ -69,19 +61,7 @@ resource "google_compute_firewall" "allow_management" {
 
 
 # Allow external load balancer HTTP ingress traffic to the K8s worker node instances
-resource "google_compute_firewall" "allow_http" {
-  name        = "allow-http-${local.rand_suffix}"
-  project     = var.gcp_project
-  network     = google_compute_network.k8s.id
-  target_tags = ["k8s-node"]
 
-  allow {
-    protocol = "tcp"
-    ports    = [for p in distinct(flatten(values(var.proxied_vms))) : tostring(p)]
-  }
-
-  source_ranges = ["0.0.0.0/0"]
-}
 
 # Route Pod CIDR via the worker node so the Proxied VM can address the Proxy Pod directly
 resource "google_compute_route" "pod_cidr_route" {

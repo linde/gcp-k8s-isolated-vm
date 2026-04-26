@@ -9,6 +9,13 @@ import os
 
 class ProxiedHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        if self.path == '/healthz':
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.end_headers()
+            self.wfile.write(b"OK")
+            return
+
         try:
             query = urllib.parse.urlparse(self.path).query
             params = urllib.parse.parse_qs(query)

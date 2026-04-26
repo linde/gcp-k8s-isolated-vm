@@ -11,13 +11,13 @@ sleep 10
 
 GATEWAY_IP=$(ip route show default | awk '{print $3}')
 ACTIVE_IFACE=$(ip route show default | grep -Po '(?<=dev )(\S+)')
-WORKER_IP="${worker_node_ip}"
+POD_TUNNEL_ENDPOINT_IP="${pod_tunnel_endpoint_ip}"
 
-ip link add name geneve${tunnel_id} type geneve id ${tunnel_id} remote $WORKER_IP
+ip link add name geneve${tunnel_id} type geneve id ${tunnel_id} remote $POD_TUNNEL_ENDPOINT_IP
 ip addr add ${vm_tunnel_ip}/24 dev geneve${tunnel_id}
 ip link set geneve${tunnel_id} up
 
-ip route add $WORKER_IP via $GATEWAY_IP dev $ACTIVE_IFACE
+ip route add $POD_TUNNEL_ENDPOINT_IP via $GATEWAY_IP dev $ACTIVE_IFACE
 ip route add ${k8s_subnet_cidr} via $GATEWAY_IP dev $ACTIVE_IFACE
 ip route del default || true
 ip route add default via ${gw_tunnel_ip} dev geneve${tunnel_id}

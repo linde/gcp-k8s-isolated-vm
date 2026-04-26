@@ -1,6 +1,6 @@
 output "proxied_vm_ip" {
-  value       = var.static_ip
-  description = "The internal IP of the proxied VM (pre-allocated)."
+  value       = google_compute_address.static_ip.address
+  description = "The internal IP of the proxied VM."
 }
 
 

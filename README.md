@@ -62,8 +62,87 @@ graph LR
 - **Isolated VM Layer**: Configured directly with a Geneve overlay interface utilizing the proxy pod as a transparent gateway.
 - **Kubernetes Proxy Layer**: Configured in the pod network to bind incoming requests and route payload traffic across the established overlay tunnel to the VM.
 - **Egress Masquerading**: All external requests originating from the VM default to utilizing the proxy pod's Geneve gateway interface, ensuring outbound calls correctly translate to the cluster's public egress address.
-
 ---
+
+## Detailed Execution and Request Flows
+
+### 1. Terraform Apply Sequence
+
+The following illustrates the sequence of resources being created during a `terraform apply`.  It focuses on project `02-proxied-vms` and the resources it creates because `01-base-cluster` is a straightforward setup of a VPC, subnetwork, and self managed k8s cluster.
+
+```mermaid
+%%{init: { 'sequence': {'wrap': true} } }%%
+sequenceDiagram
+    autonumber
+    participant Base as 01-base-cluster
+    participant Caller as 02-proxied-vms
+    participant Module as modules/proxied_vm
+    participant Pod as Proxy Pod
+    participant Script as VM Startup Script
+    participant VMSvc as Python Workload Service
+
+    Base->>Base: "Creates network, CP, and Worker"
+    Base->>Caller: "Exposes shared outputs"
+    Caller->>Module: "for_each host in proxied_vms"
+    Module->>Module: "Allocates static address in GCP"
+    Module->>Pod: "Creates Deployment (Proxy Pod)"
+    Module->>Module: "Deploys k8s service (Internal LoadBalancer)"
+    Module->>Module: "Extracts LoadBalancer IP from service"
+    Module->>Script: "Spawns VM with rendered script (LB IP endpoint)"
+    Script->>Script: "Builds Geneve interface"
+    Script->>Script: "Routes default internet to tunnel"
+    Script->>VMSvc: "Creates daemon and workload"
+```
+
+### 2. Life of a Request
+
+The following shows the flow of data during an end user request of the proxied service and the return of the response.
+
+```mermaid
+%%{init: { 'sequence': {'wrap': true} } }%%
+sequenceDiagram
+    autonumber
+    participant EndUser as End User
+    participant ExtSvc as External Service
+    participant Pod as Proxy Pod
+    participant Tunnel as Geneve Tunnel
+    participant Script as VM Startup Script
+    participant VMSvc as Python Workload Service
+    participant Internet as External Site (httpbin.org)
+
+    EndUser->>ExtSvc: "Inbound Service Request"
+    ExtSvc->>Pod: "Forwards to Proxy Pod"
+    Pod->>Tunnel: "Forwards via Tunnel"
+    Tunnel->>Script: "Delivers to VM\noverlay"
+    Script->>VMSvc: "Hands off to\nPython Workload"
+    
+    VMSvc->>Script: "Triggers Egress Request"
+    Script->>Tunnel: "Sends to overlay"
+    Tunnel->>Pod: "Routes to proxy\npod endpoint"
+    Pod->>Internet: "Forwards to\noutside internet"
+    
+    Internet->>Pod: "Egress Response\n(External Data)"
+    Pod->>Tunnel: "Returns via\nTunnel"
+    Tunnel->>Script: "Delivers to VM overlay"
+    Script->>VMSvc: "Data arrives back\nat Workload"
+    
+    VMSvc->>Script: "Submits Inbound Response"
+    Script->>Tunnel: "Sends back via tunnel"
+    Tunnel->>Pod: "Routes to proxy\npod endpoint"
+    Pod->>ExtSvc: "Returns to External Svc"
+    ExtSvc->>EndUser: "Delivers to End User"
+```
+
+### Exposed Outputs from `01-base-cluster`
+The following important variables are read by `02-proxied-vms` via the remote state:
+- `network_id`: The ID of the VPC network.
+- `subnetwork_id`: The ID of the regional subnetwork.
+- `worker_node_ip`: Internal IP of the k8s node.
+- `vm_ssh_public_key`: SSH authorized key.
+- `control_plane_public_ip`: Native IP for CP connections.
+- `kubeconfig_path`: Absolute path to downloaded config.
+- `rand_suffix`: Used to generate clean names.
+
 
 ## Getting Started
 
@@ -126,7 +205,7 @@ curl -s -S --connect-timeout 5 "http://${endpoint}?url=https://google.com" | jq 
 
 One heads-up: the kubeconfig uses a short lived token. You might need to refresh it by running `terraform apply; export KUBECONFIG=$(terraform output -raw kubeconfig_path)` in the `tf/01-base-cluster` directory. 
 
-### 4. Provision and Test Agent Gateway (Egress Governance)
+<!-- ### 4. Provision and Test Agent Gateway (Egress Governance)
 
 Deploy the Agent Gateway infrastructure to govern egress traffic from the workloads:
 
@@ -157,5 +236,5 @@ curl -v "http://${AGENTGW}/?url=http://icanhazip.com"
 ```
 Expected output: Failure (500 Internal Server Error) with `HTTP Error 403: Forbidden`.
 
-
+ -->
 

@@ -4,6 +4,15 @@ variable "os_image" {
   description = "The boot image for the external proxied instance."
 }
 
+variable "proxied_vms" {
+  type        = map(list(number))
+  description = "Map of proxied VM names to their exposed ports."
+  default = {
+    "httpbin1" = [8080]
+    "httpbin2" = [8080, 8888]
+  }
+}
+
 
 
 

@@ -32,11 +32,16 @@ resource "kubernetes_deployment" "proxy" {
 
         container {
           name  = "proxy"
-          # Using kube-proxy image NOT for its functionality, but because it contains iptables tools.
-          image = "registry.k8s.io/kube-proxy:v1.32.13"
+          # Using debian thin image and installing required tools on boot.
+          image = "debian:bookworm-slim"
 
           security_context {
             privileged = true
+          }
+
+          env {
+            name  = "PROXIED_VM_IP"
+            value = google_compute_address.static_ip.address
           }
 
           dynamic "env" {
@@ -54,8 +59,18 @@ resource "kubernetes_deployment" "proxy" {
             }
           }
 
+          port {
+            container_port = 6081
+            protocol       = "UDP"
+          }
+
           command = ["/bin/sh", "-c", <<EOF
+apt-get update && apt-get install -y iproute2 iptables curl
 echo 1 > /proc/sys/net/ipv4/ip_forward
+ip link del geneve0 2>/dev/null || true
+ip link add name geneve0 type geneve id ${var.tunnel_id} remote $PROXIED_VM_IP
+ip addr add 192.168.${var.tunnel_id}.1/24 dev geneve0
+ip link set geneve0 up
 iptables -t nat -A PREROUTING -p tcp -j DNAT --to-destination ${local.vm_tunnel_ip}
 iptables -t nat -A POSTROUTING -p tcp -d ${local.vm_tunnel_ip} -j MASQUERADE
 while true; do sleep 3600; done
@@ -83,6 +98,32 @@ resource "kubernetes_service" "proxy" {
         port        = port.value
         target_port = port.value
       }
+    }
+
+    selector = {
+      app = "${var.name_prefix}-${local.suffix}"
+    }
+  }
+}
+
+resource "kubernetes_service" "geneve_tunnel" {
+  metadata {
+    name      = "${var.name_prefix}-tunnel-svc"
+    namespace = "default"
+    annotations = {
+      "cloud.google.com/load-balancer-type" = "Internal"
+      "networking.gke.io/internal-load-balancer-subnet" = var.subnetwork_id
+    }
+  }
+
+  spec {
+    type = "LoadBalancer"
+
+    port {
+      name        = "geneve"
+      port        = 6081
+      target_port = 6081
+      protocol    = "UDP"
     }
 
     selector = {

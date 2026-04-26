@@ -20,3 +20,15 @@ resource "google_project_iam_member" "security_admin" {
   role    = "roles/compute.securityAdmin"
   member  = "serviceAccount:${google_service_account.k8s_node.email}"
 }
+
+resource "google_project_iam_member" "compute_loadbalancer_admin" {
+  project = var.gcp_project
+  role    = "roles/compute.loadBalancerAdmin"
+  member  = "serviceAccount:${google_service_account.k8s_node.email}"
+}
+
+resource "google_project_iam_member" "compute_instance_admin" {
+  project = var.gcp_project
+  role    = "roles/compute.instanceAdmin"
+  member  = "serviceAccount:${google_service_account.k8s_node.email}"
+}

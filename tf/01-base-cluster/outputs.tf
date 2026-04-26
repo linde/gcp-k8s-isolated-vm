@@ -18,15 +18,7 @@ output "network_id" {
   value       = google_compute_network.k8s.id
 }
 
-output "proxied_vm_static_ips" {
-  description = "Map of allocated static internal IPs for proxied VMs."
-  value       = { for k, v in google_compute_address.proxied_vm_static_ip : k => v.address }
-}
 
-output "proxied_vms" {
-  description = "Mapping of VM name prefixes to lists of exposed ports"
-  value       = var.proxied_vms
-}
 
 output "rand_suffix" {
   description = "Random suffix generated for resource naming"

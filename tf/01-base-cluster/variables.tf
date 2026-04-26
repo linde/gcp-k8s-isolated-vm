@@ -5,20 +5,7 @@ variable "gcp_project" {
   type        = string
 }
 
-variable "proxied_vms" {
-  description = "Mapping of VM name prefixes to lists of exposed ports"
-  type = map(list(number))
-  default = {
-    httpbin1 = [8080]
-    httpbin2 = [8080, 8888]
-  }
-  validation {
-    condition = alltrue([
-      for ports in var.proxied_vms : length(ports) == length(distinct(ports))
-    ])
-    error_message = "Duplicates are not allowed in the list of ports for a given VM"
-  }
-}
+
 
 ## optional overrides
 
