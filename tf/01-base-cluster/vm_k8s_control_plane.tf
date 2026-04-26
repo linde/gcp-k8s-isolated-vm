@@ -89,8 +89,7 @@ resource "null_resource" "fetch_kubeconfig" {
   depends_on = [google_compute_instance.cp_node]
 
   triggers = {
-    # TODO figure out if this is needed. i think it is evergreen
-    # always_run = timestamp()
+    always_run = timestamp()
   }
 
   provisioner "local-exec" {
