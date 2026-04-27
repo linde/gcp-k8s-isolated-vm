@@ -40,6 +40,11 @@ output "subnetwork_id" {
   value       = google_compute_subnetwork.k8s_subnet.id
 }
 
+output "subnetwork_name" {
+  description = "Name of the regional subnetwork"
+  value       = google_compute_subnetwork.k8s_subnet.name
+}
+
 output "vm_ssh_public_key" {
   description = "The public SSH key for the control plane and runner VMs"
   value       = tls_private_key.vm_ssh_key.public_key_openssh
@@ -53,4 +58,9 @@ output "worker_node_ip" {
 output "zone" {
   description = "The GCP zone where the Kubernetes worker node resides"
   value       = google_compute_instance.worker_node[0].zone
+}
+
+output "gke_node_service_account_email" {
+  description = "The service account email for GKE nodes"
+  value       = google_service_account.k8s_node.email
 }

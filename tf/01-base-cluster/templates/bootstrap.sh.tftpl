@@ -48,7 +48,29 @@ apt-mark hold kubelet kubeadm kubectl
 
 # Node-specific initialization
 echo ">>> Configuring Kubelet for external Cloud Provider..."
-echo 'KUBELET_EXTRA_ARGS="--cloud-provider=external"' > /etc/default/kubelet
+echo 'KUBELET_EXTRA_ARGS="--cloud-provider=external --image-credential-provider-config=/etc/kubernetes/image-credential-provider.yaml --image-credential-provider-bin-dir=/usr/local/bin"' | sudo tee /etc/default/kubelet
+
+# Add gke auth provider
+gsutil cp gs://gke-release/auth-provider-gcp/v0.0.2-gke.4/linux_amd64/auth-provider-gcp /usr/local/bin/auth-provider-gcp
+chmod a+x /usr/local/bin/auth-provider-gcp
+
+mkdir -p /etc/kubernetes
+tee /etc/kubernetes/image-credential-provider.yaml > /dev/null <<EOF
+apiVersion: kubelet.config.k8s.io/v1
+kind: CredentialProviderConfig
+providers:
+  - name: auth-provider-gcp
+    apiVersion: credentialprovider.kubelet.k8s.io/v1
+    matchImages:
+    - "*.gcr.io"
+    - "*.pkg.dev"
+    defaultCacheDuration: "12h"
+    args:
+    - get-credentials
+EOF
+
+
+
 
 %{ if is_control_plane }
 if [ ! -f /etc/kubernetes/admin.conf ]; then

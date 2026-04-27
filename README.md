@@ -18,10 +18,14 @@ The repository has two independent Terraform workspaces to cleanly isolate the l
    - Provisions the control plane and worker nodes.
    - Configures local `outputs.tf` to export necessary networking state.
 
-2. **`tf/02-proxied-vms/`**:
-   - Ingests variables from the base workspace via `terraform_remote_state`.
-   - Generates proxy workers based on proxied_ports -- allocates a VM runner and pod which tunnels ingress into and egress from it.
-   - Exposes the proxied ports from the pods for debugging and via a Kubernetes LoadBalancer service.
+2. **`tf/02-tunnel-image/`**:
+   - Creates the Artifact Registry and enables required APIs.
+   - Builds and pushes the Docker image for proxy pod using community Docker provider!
+   - *Authentication*: The Docker provider handles authentication automatically via Google access tokens.
+
+3. **`tf/03-proxied-vms/`**:
+   - Ingests variables from base cluster and image path from state.
+   - Generates proxy workers based on proxied_ports -- allocates a VM runner and pod which pulls custom image!
 
 ---
 
@@ -170,12 +174,24 @@ terraform apply
 export KUBECONFIG=$(terraform output -raw kubeconfig_path)
 ```
 
-### 2. Provision the Application Layer (Proxied VMs)
+### 2. Provision the Tunnel Image
 
-Deploy the unique application micro-VMs secured with mTLS:
+Provision the registry and build the proxy image. Note that the Docker provider is now configured to handle authentication automatically via Google access tokens, reducing manual setup. If manual configuration is preferred or needed, you can use:
 
 ```bash
-cd ../02-proxied-vms
+cd ../02-tunnel-image
+
+terraform init
+terraform apply
+```
+
+
+### 3. Provision the Application Layer (Proxied VMs)
+
+Deploy the unique application micro-VMs:
+
+```bash
+cd ../03-proxied-vms
 
 # Uses the same project ID from the base configuration
 
@@ -203,14 +219,12 @@ curl -s -S --connect-timeout 5 "http://${endpoint}?url=https://google.com" | jq 
 
 ```
 
-One heads-up: the kubeconfig uses a short lived token. You might need to refresh it by running `terraform apply; export KUBECONFIG=$(terraform output -raw kubeconfig_path)` in the `tf/01-base-cluster` directory. 
-
 <!-- ### 4. Provision and Test Agent Gateway (Egress Governance)
 
 Deploy the Agent Gateway infrastructure to govern egress traffic from the workloads:
 
 ```bash
-cd ../03-agent-gateway
+cd ../04-agent-gateway
 
 terraform init
 terraform apply
@@ -238,3 +252,13 @@ Expected output: Failure (500 Internal Server Error) with `HTTP Error 403: Forbi
 
  -->
 
+
+
+### Next Steps
+
+* TODO figure out a way to regenerate the kubeconfig whenever the CP is recreated but not more often than that
+* TODO combine outputs maybe so there are fewer things e.g. subnet id and name.
+* TODO and tighten variable treatments (all used, minimal set, descriptions up top, alpha, etc)
+* TODO Verify cloud controller manager yaml needs the subnet if an ILB has the subnet defined the right way with the short name not id.
+* TODO let's avoid using "latest" for the image and instead share the path with the hash in the 02 project output
+* TODO default to / for sample python workload (currently it hangs without a /)

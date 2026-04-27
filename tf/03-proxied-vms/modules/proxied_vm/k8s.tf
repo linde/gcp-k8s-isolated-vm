@@ -1,4 +1,5 @@
 resource "kubernetes_deployment" "proxy" {
+
   metadata {
     name      = "${var.name_prefix}-${local.suffix}"
     namespace = "default"
@@ -32,8 +33,8 @@ resource "kubernetes_deployment" "proxy" {
 
         container {
           name  = "proxy"
-          # Using debian thin image and installing required tools on boot.
-          image = "debian:bookworm-slim"
+          # Using custom tunnel image.
+          image = var.tunnel_image
 
           security_context {
             privileged = true
@@ -43,6 +44,28 @@ resource "kubernetes_deployment" "proxy" {
             name  = "PROXIED_VM_IP"
             value = google_compute_address.static_ip.address
           }
+
+          env {
+            name  = "TUNNEL_ID"
+            value = var.tunnel_id
+          }
+          env {
+            name  = "VM_TUNNEL_IP"
+            value = local.vm_tunnel_ip
+          }
+
+          env {
+            name  = "PROXIED_PORTS"
+            value = join(",", var.proxied_ports)
+          }
+          env {
+            name  = "HEALTH_CHECK_PORT"
+            value = var.health_check_port
+          }
+
+
+
+
 
           dynamic "env" {
             for_each = var.egress_proxy_url != "" ? ["HTTP_PROXY", "HTTPS_PROXY"] : []
@@ -64,18 +87,20 @@ resource "kubernetes_deployment" "proxy" {
             protocol       = "UDP"
           }
 
-          command = ["/bin/sh", "-c", <<EOF
-apt-get update && apt-get install -y iproute2 iptables curl
-echo 1 > /proc/sys/net/ipv4/ip_forward
-ip link del geneve0 2>/dev/null || true
-ip link add name geneve0 type geneve id ${var.tunnel_id} remote $PROXIED_VM_IP
-ip addr add 192.168.${var.tunnel_id}.1/24 dev geneve0
-ip link set geneve0 up
-iptables -t nat -A PREROUTING -p tcp -j DNAT --to-destination ${local.vm_tunnel_ip}
-iptables -t nat -A POSTROUTING -p tcp -d ${local.vm_tunnel_ip} -j MASQUERADE
-while true; do sleep 3600; done
-EOF
-          ]
+          readiness_probe {
+            tcp_socket {
+              port = var.health_check_port
+            }
+
+
+
+
+            initial_delay_seconds = 5
+            period_seconds        = 10
+          }
+
+
+
         }
       }
     }
@@ -112,7 +137,7 @@ resource "kubernetes_service" "geneve_tunnel" {
     namespace = "default"
     annotations = {
       "cloud.google.com/load-balancer-type" = "Internal"
-      "networking.gke.io/internal-load-balancer-subnet" = var.subnetwork_id
+      "networking.gke.io/internal-load-balancer-subnet" = var.subnetwork_name
     }
   }
 
