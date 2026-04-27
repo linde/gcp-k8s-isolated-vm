@@ -9,29 +9,30 @@ This project is a scratchpad to explore integrating isolated Google Compute Engi
 
 ## Architecture
 
-The repository has two independent Terraform workspaces to cleanly isolate the lifecycle of the base Kubernetes infrastructure from the proxied virtual machines:
+The repository has multiple independent Terraform workspaces to delineate separate concerns in the project:
 
 ### Workspaces:
 
 1. **`tf/01-base-cluster/`**:
-   - Manages core networking (VPC, firewalls, internal subnets).
+   - Manages core networking (VPC, firewalls, internal subnets) and required GCP services for it.
    - Provisions the control plane and worker nodes.
    - Configures local `outputs.tf` to export necessary networking state.
 
 2. **`tf/02-tunnel-image/`**:
-   - Creates the Artifact Registry and enables required APIs.
-   - Builds and pushes the Docker image for proxy pod using community Docker provider!
-   - *Authentication*: The Docker provider handles authentication automatically via Google access tokens.
+   - Creates the Artifact Registry and enables its requried API services.
+   - Builds and pushes a Docker image for proxy pod using community Docker provider. 
+   - Image sets up the tunnel from the pod side and routes traffic to it.
 
 3. **`tf/03-proxied-vms/`**:
    - Ingests variables from base cluster and image path from state.
-   - Generates proxy workers based on proxied_ports -- allocates a VM runner and pod which pulls custom image!
+   - Configured via a single `proxied_ports` variable which maps isolated vms to the ports they expose. Defaults to 2 vms with 1 and 2 ports, respectively.
+   - Generates proxy workers based on proxied_ports -- allocates a VM runner and pod which pulls the custom image built in `tf/02-tunnel-image/`
 
 ---
 
 ## Traffic Flow and Network Architecture
 
-The following diagram illustrates how the isolated virtual machine integrates into the Kubernetes cluster via a Geneve overlay tunnel, routing both external ingress and direct egress entirely through the proxy pod on the worker node:
+The following diagram illustrates at a high level how the isolated virtual machine integrates into the Kubernetes cluster via a Geneve overlay tunnel, routing both external ingress and direct egress entirely through the proxy pod on the worker node:
 
 ```mermaid
 graph LR
@@ -40,33 +41,27 @@ graph LR
     subgraph VPC [GCP VPC Network]
         direction TB
         GCP_LB[GCP External Load Balancer]
+        
         subgraph Subnet [k8s-subnet]
             direction LR
             K8s_Node[Kubernetes Worker Node]
-            subgraph Overlay [Pure Geneve Tunnel]
+            
+            subgraph Pods [GKE Space]
                 Proxy_Pod[Proxy Pod]
-                Proxied_VM[Isolated VM]
             end
         end
+        
+        Proxied_VM[Isolated VM]
     end
+
+    %% Returning Tunnel path
+    Proxied_VM -->|Geneve Tunnel via ILB| Proxy_Pod
 
     %% Inbound Traffic (Ingress)
     Internet -->|LoadBalancer IP| GCP_LB
-    GCP_LB -->|NodePort| K8s_Node
-    K8s_Node -->|socat TCP-LISTEN| Proxy_Pod
+    GCP_LB -->|Mapping| Proxy_Pod
     Proxy_Pod -->|Geneve Datagram| Proxied_VM
-
-    %% Outbound Traffic (Egress)
-    Proxied_VM -->|Default Gateway| Proxy_Pod
-    Proxy_Pod -->|NAT Masquerade| Internet
 ```
-
-### Networking Components Breakdown
-
-- **Isolated VM Layer**: Configured directly with a Geneve overlay interface utilizing the proxy pod as a transparent gateway.
-- **Kubernetes Proxy Layer**: Configured in the pod network to bind incoming requests and route payload traffic across the established overlay tunnel to the VM.
-- **Egress Masquerading**: All external requests originating from the VM default to utilizing the proxy pod's Geneve gateway interface, ensuring outbound calls correctly translate to the cluster's public egress address.
----
 
 ## Detailed Execution and Request Flows
 
