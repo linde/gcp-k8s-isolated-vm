@@ -219,46 +219,10 @@ curl -s -S --connect-timeout 5 "http://${endpoint}?url=https://google.com" | jq 
 
 ```
 
-<!-- ### 4. Provision and Test Agent Gateway (Egress Governance)
-
-Deploy the Agent Gateway infrastructure to govern egress traffic from the workloads:
-
-```bash
-cd ../04-agent-gateway
-
-terraform init
-terraform apply
-```
-
-To test the gateway, set an environment variable for the Gateway IP:
-
-```bash
-export AGENTGW=$(kubectl get gateway -A -o jsonpath='{.items[?(@.metadata.name=="egress-gateway")].status.addresses[0].value}')
-```
-
-Using the default policy supply in the local helm chart, verify that traffic to `httpbin.org` is allowed:
-
-```bash
-curl http://${AGENTGW}/?url=http://httpbin.org/ip
-```
-Expected output: Success (200 OK) with proxied response.
-
-Next, verify that traffic to `icanhazip.com` is blocked:
-
-```bash
-curl -v "http://${AGENTGW}/?url=http://icanhazip.com"
-```
-Expected output: Failure (500 Internal Server Error) with `HTTP Error 403: Forbidden`.
-
- -->
-
-
-
 ### Next Steps
 
 * TODO figure out a way to regenerate the kubeconfig whenever the CP is recreated but not more often than that
-* TODO combine outputs maybe so there are fewer things e.g. subnet id and name.
-* TODO and tighten variable treatments (all used, minimal set, descriptions up top, alpha, etc)
+* TODO combine outputs maybe so there are fewer things e.g. subnet id and name and tighten variable definition formats
 * TODO Verify cloud controller manager yaml needs the subnet if an ILB has the subnet defined the right way with the short name not id.
 * TODO let's avoid using "latest" for the image and instead share the path with the hash in the 02 project output
-* TODO default to / for sample python workload (currently it hangs without a /)
+* TODO have our python workload handle a missing URI and default to the same thing as /
