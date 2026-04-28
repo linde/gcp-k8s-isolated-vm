@@ -18,15 +18,10 @@ The repository has multiple independent Terraform workspaces to delineate separa
    - Provisions the control plane and worker nodes.
    - Configures local `outputs.tf` to export necessary networking state.
 
-2. **`tf/02-tunnel-image/`**:
-   - Creates the Artifact Registry and enables its requried API services.
-   - Builds and pushes a Docker image for proxy pod using community Docker provider. 
-   - Image sets up the tunnel from the pod side and routes traffic to it.
-
-3. **`tf/03-proxied-vms/`**:
+2. **`tf/02-proxied-vms/`**:
    - Ingests variables from base cluster and image path from state.
    - Configured via a single `proxied_ports` variable which maps isolated vms to the ports they expose. Defaults to 2 vms with 1 and 2 ports, respectively.
-   - Generates proxy workers based on proxied_ports -- allocates a VM runner and pod which pulls the custom image built in `tf/02-tunnel-image/`
+   - Generates proxy workers based on proxied_ports -- allocates a VM runner and pod.
 
 ---
 
@@ -46,7 +41,7 @@ graph LR
             direction LR
             K8s_Node[Kubernetes Worker Node]
             
-            subgraph Pods [GKE Space]
+            subgraph Pods [Kubernetes Space]
                 Proxy_Pod[Proxy Pod]
             end
         end
@@ -173,20 +168,12 @@ export KUBECONFIG=$(terraform output -raw kubeconfig_path)
 
 Provision the registry and build the proxy image. Note that the Docker provider is now configured to handle authentication automatically via Google access tokens, reducing manual setup. If manual configuration is preferred or needed, you can use:
 
-```bash
-cd ../02-tunnel-image
-
-terraform init
-terraform apply
-```
-
-
-### 3. Provision the Application Layer (Proxied VMs)
+### 2. Provision the Application Layer (Proxied VMs)
 
 Deploy the unique application micro-VMs:
 
 ```bash
-cd ../03-proxied-vms
+cd ../02-proxied-vms
 
 # Uses the same project ID from the base configuration
 
