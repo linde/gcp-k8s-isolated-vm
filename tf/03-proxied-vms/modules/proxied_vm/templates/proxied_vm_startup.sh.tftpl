@@ -16,6 +16,9 @@ ip link add name geneve${tunnel_id} type geneve id ${tunnel_id} remote $POD_TUNN
 ip addr add ${vm_tunnel_ip}/24 dev geneve${tunnel_id}
 ip link set geneve${tunnel_id} up
 
+# Force kernel to use tunnel IP as source for ARP requests
+sysctl -w net.ipv4.conf.geneve${tunnel_id}.arp_announce=2
+
 # Fix asymmetric Geneve routing by rewriting source IP to match expected remote
 iptables -t nat -A INPUT -p udp --dport 6081 -j SNAT --to-source ${pod_tunnel_endpoint_ip}
 

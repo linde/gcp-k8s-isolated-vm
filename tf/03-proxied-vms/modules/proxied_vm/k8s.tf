@@ -44,8 +44,9 @@ resource "kubernetes_deployment" "proxy" {
             ip addr add "192.168.$TUNNEL_ID.1/24" dev geneve0
             ip link set geneve0 up                       
 
-            iptables -t nat -A PREROUTING -p tcp -j DNAT --to-destination "$VM_TUNNEL_IP"
+            iptables -t nat -A PREROUTING -i eth0 -p tcp -j DNAT --to-destination "$VM_TUNNEL_IP"
             iptables -t nat -A POSTROUTING -p tcp -d "$VM_TUNNEL_IP" -j MASQUERADE
+            iptables -t nat -A POSTROUTING -s 192.168.$TUNNEL_ID.0/24 -o eth0 -j MASQUERADE
             
             sleep infinity
             EOF
