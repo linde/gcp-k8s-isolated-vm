@@ -39,9 +39,8 @@ graph LR
         
         subgraph Subnet [k8s-subnet]
             direction LR
-            K8s_Node[Kubernetes Worker Node]
-            
-            subgraph Pods [Kubernetes Space]
+           
+            subgraph Pods [Kubernetes Node]
                 Proxy_Pod[Proxy Pod]
             end
         end
@@ -54,7 +53,7 @@ graph LR
 
     %% Inbound Traffic (Ingress)
     Internet -->|LoadBalancer IP| GCP_LB
-    GCP_LB -->|Mapping| Proxy_Pod
+    GCP_LB --> Proxy_Pod
     Proxy_Pod -->|Geneve Datagram| Proxied_VM
 ```
 
@@ -71,21 +70,18 @@ sequenceDiagram
     participant Base as 01-base-cluster
     participant Caller as 02-proxied-vms
     participant Module as modules/proxied_vm
-    participant Pod as Proxy Pod
     participant Script as VM Startup Script
     participant VMSvc as Python Workload Service
 
-    Base->>Base: "Creates network, CP, and Worker"
-    Base->>Caller: "Exposes shared outputs"
-    Caller->>Module: "for_each host in proxied_vms"
-    Module->>Module: "Allocates static address in GCP"
-    Module->>Pod: "Creates Deployment (Proxy Pod)"
-    Module->>Module: "Deploys k8s service (Internal LoadBalancer)"
-    Module->>Module: "Extracts LoadBalancer IP from service"
-    Module->>Script: "Spawns VM with rendered script (LB IP endpoint)"
-    Script->>Script: "Builds Geneve interface"
-    Script->>Script: "Routes default internet to tunnel"
-    Script->>VMSvc: "Creates daemon and workload"
+    Base->>Base: Creates network, CP, and Worker
+    Base->>Caller: Exposes shared outputs
+    Caller->>Module: for_each host in proxied_vms
+    Module->>Module: Allocates static address in GCP
+    Module->>Module: Deploys k8s pod and service (w/Internal LoadBalancer)
+    Module->>Script: Spawns VM with rendered script (passing ILB IP)
+    Script->>Script: Builds Geneve interface with ILB as gateway
+    Script->>Script: Routes default internet to tunnel
+    Script->>VMSvc: Deploys sample python app
 ```
 
 ### 2. Life of a Request
@@ -100,31 +96,26 @@ sequenceDiagram
     participant ExtSvc as External Service
     participant Pod as Proxy Pod
     participant Tunnel as Geneve Tunnel
-    participant Script as VM Startup Script
     participant VMSvc as Python Workload Service
     participant Internet as External Site (httpbin.org)
 
-    EndUser->>ExtSvc: "Inbound Service Request"
-    ExtSvc->>Pod: "Forwards to Proxy Pod"
-    Pod->>Tunnel: "Forwards via Tunnel"
-    Tunnel->>Script: "Delivers to VM\noverlay"
-    Script->>VMSvc: "Hands off to\nPython Workload"
+    EndUser->>ExtSvc: Inbound Service Request
+    ExtSvc->>Pod: Forwards to Proxy Pod
+    Pod->>Tunnel: Forwards via Tunnel
+    Tunnel->>VMSvc: Delivers to Python Workload port
     
-    VMSvc->>Script: "Triggers Egress Request"
-    Script->>Tunnel: "Sends to overlay"
-    Tunnel->>Pod: "Routes to proxy\npod endpoint"
-    Pod->>Internet: "Forwards to\noutside internet"
+    VMSvc->>Tunnel: Egress request routed to overlay
+    Tunnel->>Pod: Routes to proxy pod endpoint
+    Pod->>Internet: Forwards to outside internet
     
-    Internet->>Pod: "Egress Response\n(External Data)"
-    Pod->>Tunnel: "Returns via\nTunnel"
-    Tunnel->>Script: "Delivers to VM overlay"
-    Script->>VMSvc: "Data arrives back\nat Workload"
+    Internet->>Pod: Egress Response (External Data)
+    Pod->>Tunnel: Returns via Tunnel
+    Tunnel->>VMSvc: Data arrives back at Workload
     
-    VMSvc->>Script: "Submits Inbound Response"
-    Script->>Tunnel: "Sends back via tunnel"
-    Tunnel->>Pod: "Routes to proxy\npod endpoint"
-    Pod->>ExtSvc: "Returns to External Svc"
-    ExtSvc->>EndUser: "Delivers to End User"
+    VMSvc->>Tunnel: Sends back via tunnel
+    Tunnel->>Pod: Routes to proxy pod endpoint
+    Pod->>ExtSvc: Returns to External Svc
+    ExtSvc->>EndUser: Delivers to End User
 ```
 
 ### Exposed Outputs from `01-base-cluster`
@@ -144,7 +135,7 @@ Deploying the complete environment follows a sequenced application workflow:
 
 ### 1. Provision the Base Cluster
 
-First setup some variables in a `terraform.tfvars` file or via params. You can see the available params in `variables.tf`. The variable that does not have a default is `gcp_project`.
+First setup some variables in a `terraform.tfvars` file or via params. You can see the available params in `variables.tf`. In general, variables have workable defaults; the exception is `gcp_project` which has to supplied.
 
 
 ```bash
@@ -166,7 +157,8 @@ export KUBECONFIG=$(terraform output -raw kubeconfig_path)
 
 ### 2. Provision the Tunnel Image
 
-Provision the registry and build the proxy image. Note that the Docker provider is now configured to handle authentication automatically via Google access tokens, reducing manual setup. If manual configuration is preferred or needed, you can use:
+Provision the registry and build the proxy image. This requires `docker` to be installed locally. 
+
 
 ### 2. Provision the Application Layer (Proxied VMs)
 
@@ -189,7 +181,8 @@ Find your LoadBalancer public endpoints and confirm traffic securely traverses t
 # using the KUBECONFIG set above
 
 # Dynamically fetch all LoadBalancer IPs and their associated ports, then curl each:
-export ENDPOINTS=$(kubectl get svc -o json | jq -r '.items[] | select(.spec.type=="LoadBalancer") | 
+export ENDPOINTS=$(kubectl get svc -o json | jq -r '.items[] | 
+  select(.spec.type=="LoadBalancer" and .metadata.annotations["cloud.google.com/load-balancer-type"] != "Internal") | 
   (.status.loadBalancer.ingress[].ip // empty) as $ip | "\($ip):\(.spec.ports[].port)"')
 for endpoint in ${ENDPOINTS}; do
   echo "Testing endpoint: http://${endpoint}"
