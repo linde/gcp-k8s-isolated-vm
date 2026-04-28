@@ -1,6 +1,5 @@
 #!/bin/bash
-apt-get update
-apt-get install -y iproute2
+
 
 # Required Override: GCP's native metadata DNS resolver (169.254.169.254) is a link-local
 # IP that drops when encapsulated into the Geneve default route destined for the remote
@@ -17,14 +16,18 @@ ip link add name geneve${tunnel_id} type geneve id ${tunnel_id} remote $POD_TUNN
 ip addr add ${vm_tunnel_ip}/24 dev geneve${tunnel_id}
 ip link set geneve${tunnel_id} up
 
+# Fix asymmetric Geneve routing by rewriting source IP to match expected remote
+iptables -t nat -A INPUT -p udp --dport 6081 -j SNAT --to-source ${pod_tunnel_endpoint_ip}
+
 ip route add $POD_TUNNEL_ENDPOINT_IP via $GATEWAY_IP dev $ACTIVE_IFACE
 ip route add ${k8s_subnet_cidr} via $GATEWAY_IP dev $ACTIVE_IFACE
 ip route del default || true
-ip route add default via ${gw_tunnel_ip} dev geneve${tunnel_id}
+ip route add default via ${gw_tunnel_ip} dev geneve${tunnel_id} src ${vm_tunnel_ip}
 
 cat << 'EOF' > /usr/local/bin/proxied_test.py
 ${python_daemon}
 EOF
 
 chmod +x /usr/local/bin/proxied_test.py
-nohup env TUNNEL_ID=${tunnel_id} python3 /usr/local/bin/proxied_test.py > /var/log/proxied_test.log 2>&1 &
+
+nohup python3 /usr/local/bin/proxied_test.py > /var/log/proxied_test.log 2>&1 &

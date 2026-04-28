@@ -33,11 +33,6 @@ variable "os_image" {
   description = "The boot image for the proxied VM."
 }
 
-variable "tunnel_image" {
-  type        = string
-  description = "GKE Proxy pod docker image path."
-}
-
 variable "worker_node_ip" {
   type        = string
   description = "The IP of the worker node acting as the Geneve tunnel endpoint."
@@ -88,8 +83,5 @@ variable "ssh_private_key_path" {
   description = "Path to the private SSH key used to connect to the worker node."
 }
 
-variable "health_check_port" {
-  type        = number
-  description = "Port for the transparent health checks"
-}
+
 

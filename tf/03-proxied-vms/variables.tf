@@ -12,8 +12,4 @@ variable "proxied_vms" {
     "httpbin2" = [8080, 8888]
   }
 }
-variable "health_check_port" {
-  type        = number
-  default     = 9090
-  description = "Port for the transparent health checks"
-}
+

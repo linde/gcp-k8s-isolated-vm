@@ -14,7 +14,7 @@
 
 - if you need to write scripts to try things, you can do this in ./tf/.tmp/scratch since they wont be checked in.
 
-- Dont change execution because of TODOs you see in markdown files. I write them there to revisit them and not distract from current execution.  If you pull them in we end up muddying our efforts across concerns.
+- Never change execution because of TODOs you see in markdown files. I write them there to revisit them and not distract from current execution.  If you pull them in we end up muddying our efforts across concerns.
 
 - You're allowed to read files under .tmp directories even though their excluded from source control.
 

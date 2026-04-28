@@ -32,10 +32,13 @@ class ProxiedHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(f'{{"message": "Successfully proxied ingress and egress", "target_url": "{url}", "body": {json.dumps(body)}, "status": {status}}}\n'.encode('utf-8'))
             print(f"Successfully handled GET request for {url}", flush=True)
         except Exception as e:
-            self.send_response(500)
-            self.send_header("Content-type", "application/json")
-            self.end_headers()
-            self.wfile.write(f'{{"error": "Proxy request failed", "details": "{str(e)}" }}\n'.encode('utf-8'))
+            try:
+                self.send_response(500)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(f'{{"error": "Proxy request failed", "details": "{str(e)}" }}\n'.encode('utf-8'))
+            except BrokenPipeError:
+                print("Broken pipe: Client disconnected before receiving error response.", flush=True)
 
 
 

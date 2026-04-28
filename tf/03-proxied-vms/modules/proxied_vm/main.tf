@@ -31,15 +31,19 @@ resource "google_compute_firewall" "allow_geneve_tunnel" {
   name        = "allow-geneve-${var.name_prefix}-${var.name_suffix}"
   project     = var.gcp_project
   network     = var.network_id
-  target_tags = ["${var.name_prefix}-node-${var.name_suffix}"]
 
   allow {
     protocol = "udp"
     ports    = ["6081"]
   }
 
+  allow {
+    protocol = "icmp"
+  }
+
   source_ranges = ["0.0.0.0/0"]
 }
+
 resource "google_compute_instance" "proxied_vm" {
   name         = "${var.name_prefix}-${local.suffix}"
   project      = var.gcp_project
@@ -71,10 +75,12 @@ resource "google_compute_instance" "proxied_vm" {
   metadata_startup_script = templatefile("${path.module}/templates/proxied_vm_startup.sh.tftpl", {
     pod_tunnel_endpoint_ip = kubernetes_service.geneve_tunnel.status[0].load_balancer[0].ingress[0].ip
     proxied_ports  = var.proxied_ports
+    worker_node_ip = var.worker_node_ip
     tunnel_id      = var.tunnel_id
     vm_tunnel_ip   = local.vm_tunnel_ip
     gw_tunnel_ip   = local.gw_tunnel_ip
     k8s_subnet_cidr = var.k8s_subnet_cidr
+
 
     python_daemon  = templatefile("${path.module}/templates/proxied_test.py.tftpl", {
       bind_address  = local.vm_tunnel_ip

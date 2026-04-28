@@ -64,3 +64,13 @@ output "gke_node_service_account_email" {
   description = "The service account email for GKE nodes"
   value       = google_service_account.k8s_node.email
 }
+
+output "k8s_subnet_cidr" {
+  description = "Subnet CIDR mapping cluster paths"
+  value       = var.k8s_subnet_cidr
+}
+
+output "k8s_pod_cidr" {
+  description = "Pods network range CIDR"
+  value       = var.k8s_pod_cidr
+}

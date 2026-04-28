@@ -221,3 +221,4 @@ curl -s -S --connect-timeout 5 "http://${endpoint}?url=https://google.com" | jq 
 * TODO Verify cloud controller manager yaml needs the subnet if an ILB has the subnet defined the right way with the short name not id.
 * TODO let's avoid using "latest" for the image and instead share the path with the hash in the 02 project output
 * TODO have our python workload handle a missing URI and default to the same thing as /
+* TODO have the proxy pod chattier in the log

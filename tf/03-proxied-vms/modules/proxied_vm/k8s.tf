@@ -33,8 +33,23 @@ resource "kubernetes_deployment" "proxy" {
 
         container {
           name  = "proxy"
-          # Using custom tunnel image.
-          image = var.tunnel_image
+          image = "nicolaka/netshoot:latest"
+
+          command = ["/bin/sh", "-c"]
+          args = [
+            <<-EOF
+            echo 1 > /proc/sys/net/ipv4/ip_forward
+            ip link del geneve0 2>/dev/null || true
+            ip link add name geneve0 type geneve id "$TUNNEL_ID" remote "$PROXIED_VM_IP"
+            ip addr add "192.168.$TUNNEL_ID.1/24" dev geneve0
+            ip link set geneve0 up                       
+
+            iptables -t nat -A PREROUTING -p tcp -j DNAT --to-destination "$VM_TUNNEL_IP"
+            iptables -t nat -A POSTROUTING -p tcp -d "$VM_TUNNEL_IP" -j MASQUERADE
+            
+            sleep infinity
+            EOF
+          ]
 
           security_context {
             privileged = true
@@ -52,27 +67,10 @@ resource "kubernetes_deployment" "proxy" {
           env {
             name  = "VM_TUNNEL_IP"
             value = local.vm_tunnel_ip
-          }
-
+          }        
           env {
-            name  = "PROXIED_PORTS"
-            value = join(",", var.proxied_ports)
-          }
-          env {
-            name  = "HEALTH_CHECK_PORT"
-            value = var.health_check_port
-          }
-
-
-
-
-
-          dynamic "env" {
-            for_each = var.egress_proxy_url != "" ? ["HTTP_PROXY", "HTTPS_PROXY"] : []
-            content {
-              name  = env.value
-              value = var.egress_proxy_url
-            }
+            name  = "WORKER_NODE_IP"
+            value = var.worker_node_ip
           }
 
           dynamic "port" {
@@ -88,19 +86,13 @@ resource "kubernetes_deployment" "proxy" {
           }
 
           readiness_probe {
-            tcp_socket {
-              port = var.health_check_port
+            exec {
+              # TODO make geneve0 a local variable
+              command = ["ip", "link", "show", "geneve0"]
             }
-
-
-
-
             initial_delay_seconds = 5
             period_seconds        = 10
           }
-
-
-
         }
       }
     }
