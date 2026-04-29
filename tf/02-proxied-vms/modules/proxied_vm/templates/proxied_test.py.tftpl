@@ -8,37 +8,40 @@ import time
 import os
 
 class ProxiedHandler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == '/healthz':
-            self.send_response(200)
-            self.send_header("Content-type", "text/plain")
-            self.end_headers()
-            self.wfile.write(b"OK")
-            return
+    def send_resp(self, status, data, content_type="application/json"):
+        self.send_response(status)
+        self.send_header("Content-type", content_type)
+        self.end_headers()
+        if isinstance(data, str):
+            self.wfile.write(data.encode('utf-8'))
+        else:
+            self.wfile.write((json.dumps(data) + "\n").encode('utf-8'))
 
-        try:
-            query = urllib.parse.urlparse(self.path).query
-            params = urllib.parse.parse_qs(query)
-            url = params.get('url', ['http://httpbin.org/ip'])[0]
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        
+        if parsed.path in ('', '/'):
+            self.send_resp(200, "OK", "text/plain")
+            return
             
-            req = urllib.request.Request(url)
-            with urllib.request.urlopen(req) as response:
-                status = response.getcode()
-                body = response.read().decode('utf-8')
-            
-            self.send_response(200)
-            self.send_header("Content-type", "application/json")
-            self.end_headers()
-            self.wfile.write(f'{{"message": "Successfully proxied ingress and egress", "target_url": "{url}", "body": {json.dumps(body)}, "status": {status}}}\n'.encode('utf-8'))
-            print(f"Successfully handled GET request for {url}", flush=True)
-        except Exception as e:
+        if parsed.path == '/proxy':
+            url = urllib.parse.parse_qs(parsed.query).get('url', ['http://httpbin.org/ip'])[0]
             try:
-                self.send_response(500)
-                self.send_header("Content-type", "application/json")
-                self.end_headers()
-                self.wfile.write(f'{{"error": "Proxy request failed", "details": "{str(e)}" }}\n'.encode('utf-8'))
-            except BrokenPipeError:
-                print("Broken pipe: Client disconnected before receiving error response.", flush=True)
+                with urllib.request.urlopen(url) as r:
+                    self.send_resp(200, {
+                        "message": "Success",
+                        "target_url": url,
+                        "body": r.read().decode('utf-8'),
+                        "status": r.getcode()
+                    })
+            except Exception as e:
+                try:
+                    self.send_resp(500, {"error": "Proxy request failed", "details": str(e)})
+                except BrokenPipeError:
+                    print("Broken pipe: Client disconnected", flush=True)
+            return
+            
+        self.send_resp(404, {"error": "Not Found"})
 
 
 

@@ -180,17 +180,22 @@ Find your LoadBalancer public endpoints and confirm traffic securely traverses t
 ```bash
 # using the KUBECONFIG set above
 
-# Dynamically fetch all LoadBalancer IPs and their associated ports, then curl each:
+# Dynamically fetch all LoadBalancer IPs and their associated ports, then check health of each:
 export ENDPOINTS=$(kubectl get svc -o json | jq -r '.items[] | 
   select(.spec.type=="LoadBalancer" and .metadata.annotations["cloud.google.com/load-balancer-type"] != "Internal") | 
   (.status.loadBalancer.ingress[].ip // empty) as $ip | "\($ip):\(.spec.ports[].port)"')
 for endpoint in ${ENDPOINTS}; do
   echo "Testing endpoint: http://${endpoint}"
-  curl -s -S --connect-timeout 5 "http://${endpoint}" | jq .
+  curl -s -S --connect-timeout 5 "http://${endpoint}"
+  echo # just a newline
 done
 
-# the service will default to httpbin.org, but you can pass in a different target via the url param
-curl -s -S --connect-timeout 5 "http://${endpoint}?url=https://google.com" | jq .
+# you can show egress by using the /proxy uri. by default, it uses httpbin.org/ip
+# this should match the IP of the k8s control node, not the runner vm
+curl -s -S --connect-timeout 5 "http://${endpoint}/proxy" | jq .
+
+# you can also pass in a different target via the url param
+curl -s -S --connect-timeout 5 "http://${endpoint}/proxy?url=https://icanhazip.com" | jq .
 
 ```
 
@@ -199,6 +204,5 @@ curl -s -S --connect-timeout 5 "http://${endpoint}?url=https://google.com" | jq 
 * TODO figure out a way to regenerate the kubeconfig whenever the CP is recreated but not more often than that
 * TODO combine outputs maybe so there are fewer things e.g. subnet id and name and tighten variable definition formats
 * TODO Verify cloud controller manager yaml needs the subnet if an ILB has the subnet defined the right way with the short name not id.
-* TODO let's avoid using "latest" for the image and instead share the path with the hash in the 02 project output
 * TODO have our python workload handle a missing URI and default to the same thing as /
 * TODO have the proxy pod chattier in the log
