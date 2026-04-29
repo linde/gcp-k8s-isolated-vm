@@ -41,7 +41,6 @@ resource "google_compute_instance" "cp_node" {
     cp_public_ip     = google_compute_address.cp_static_ip.address
     cp_join_ip       = ""
     is_control_plane = true
-    ipv6_enabled     = false
     kubeadm_token    = local.kubeadm_token
     ccm_yaml = templatefile("${path.module}/templates/ccm.yaml.tftpl", {
       cluster_cidr    = var.k8s_pod_cidr
@@ -82,6 +81,7 @@ resource "random_string" "token_secret" {
 locals {
   kubeadm_token   = "${random_string.token_id.result}.${random_string.token_secret.result}"
   kubeconfig_path = "${path.module}/.tmp/kubeconfig.yaml"
+  ssh_opts        = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${local_file.private_key.filename}"
 }
 
 # Block execution until kubeadm has finished initializing and securely download the resulting admin credential
@@ -89,16 +89,17 @@ resource "null_resource" "fetch_kubeconfig" {
   depends_on = [google_compute_instance.cp_node]
 
   triggers = {
-    instance_id = google_compute_instance.cp_node.id
-    instance_ip = google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip
+    instance_id  = google_compute_instance.cp_node.id
+    instance_ip  = google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip
+    file_missing = !fileexists(local.kubeconfig_path)
   }
 
   provisioner "local-exec" {
     command = <<EOT
       for i in {1..50}; do
-        if ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${path.module}/.tmp/vm_key admin@${google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip} "sudo test -f /etc/kubernetes/admin.conf"; then
+        if ssh ${local.ssh_opts} admin@${google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip} "sudo test -f /etc/kubernetes/admin.conf"; then
           echo "Control plane initialized! Downloading Admin Kubeconfig..."
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${path.module}/.tmp/vm_key admin@${google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip} "sudo cat /etc/kubernetes/admin.conf" > ${local.kubeconfig_path}
+          ssh ${local.ssh_opts} admin@${google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip} "sudo cat /etc/kubernetes/admin.conf" > ${local.kubeconfig_path}
           exit 0
         fi
         echo "Waiting for control plane initialization (Attempt $i of 50)..."

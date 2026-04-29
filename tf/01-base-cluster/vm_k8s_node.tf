@@ -40,7 +40,6 @@ resource "google_compute_instance" "worker_node" {
     cp_public_ip     = google_compute_address.cp_static_ip.address
     cp_join_ip       = google_compute_instance.cp_node.network_interface[0].network_ip
     is_control_plane = false
-    ipv6_enabled     = false
     kubeadm_token    = local.kubeadm_token
     ccm_yaml         = ""
   })
