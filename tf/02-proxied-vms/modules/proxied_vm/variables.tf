@@ -78,6 +78,11 @@ variable "egress_proxy_url" {
   default     = ""
   description = "The HTTP proxy URL to force for egress traffic on the proxy container."
 }
+
+variable "unix_user" {
+  type        = string
+  description = "The admin user for SSH access to VMs."
+}
 variable "ssh_private_key_path" {
   type        = string
   description = "Path to the private SSH key used to connect to the worker node."

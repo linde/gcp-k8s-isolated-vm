@@ -13,6 +13,7 @@ module "proxied_vm" {
   subnetwork_id   = data.terraform_remote_state.base.outputs.subnetwork_id
   subnetwork_name = data.terraform_remote_state.base.outputs.subnetwork_name
   os_image        = var.os_image
+  unix_user       = var.unix_user
   worker_node_ip  = data.terraform_remote_state.base.outputs.worker_node_ip
   proxied_ports   = each.value
 

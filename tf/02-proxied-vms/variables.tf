@@ -13,3 +13,9 @@ variable "proxied_vms" {
   }
 }
 
+variable "unix_user" {
+  type        = string
+  default     = "admin"
+  description = "The admin user for SSH access to VMs."
+}
+

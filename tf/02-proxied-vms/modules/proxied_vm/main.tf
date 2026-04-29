@@ -52,8 +52,7 @@ resource "google_compute_instance" "proxied_vm" {
   tags         = ["k8s-node", "${var.name_prefix}-node-${var.name_suffix}"]
 
   metadata = {
-    # TODO reconcile this with the other "admin" users (or remove)
-    ssh-keys = "debian:${var.ssh_public_key}"
+    ssh-keys = "${var.unix_user}:${var.ssh_public_key}"
   }
 
   boot_disk {

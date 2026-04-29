@@ -30,7 +30,8 @@ resource "google_compute_instance" "cp_node" {
 
   # Injects the public key we generated into the VM
   metadata = {
-    "ssh-keys" = "${var.unix_user}:${tls_private_key.vm_ssh_key.public_key_openssh}"
+    "ssh-keys"  = "${var.unix_user}:${tls_private_key.vm_ssh_key.public_key_openssh}"
+    "unix-user" = var.unix_user
   }
 
   # Use templatefile for cleaner, idiomatic bootstrap scripts
@@ -52,7 +53,7 @@ resource "google_compute_instance" "cp_node" {
   # Remove node from cluster on destroy so we clean up cloud controller managed GCP resources
   provisioner "local-exec" {
     when    = destroy
-    command = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${path.module}/.tmp/vm_key admin@${self.network_interface[0].access_config[0].nat_ip} 'sudo kubectl --kubeconfig /etc/kubernetes/admin.conf delete node ${self.name} && sleep 20'"
+    command = "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ${path.module}/.tmp/vm_key ${self.metadata["unix-user"]}@${self.network_interface[0].access_config[0].nat_ip} 'sudo kubectl --kubeconfig /etc/kubernetes/admin.conf delete node ${self.name} && sleep 20'"
   }
 
   # Ensure services are ready and propagated
@@ -97,9 +98,9 @@ resource "null_resource" "fetch_kubeconfig" {
   provisioner "local-exec" {
     command = <<EOT
       for i in {1..50}; do
-        if ssh ${local.ssh_opts} admin@${google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip} "sudo test -f /etc/kubernetes/admin.conf"; then
+        if ssh ${local.ssh_opts} ${var.unix_user}@${google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip} "sudo test -f /etc/kubernetes/admin.conf"; then
           echo "Control plane initialized! Downloading Admin Kubeconfig..."
-          ssh ${local.ssh_opts} admin@${google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip} "sudo cat /etc/kubernetes/admin.conf" > ${local.kubeconfig_path}
+          ssh ${local.ssh_opts} ${var.unix_user}@${google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip} "sudo cat /etc/kubernetes/admin.conf" > ${local.kubeconfig_path}
           exit 0
         fi
         echo "Waiting for control plane initialization (Attempt $i of 50)..."
