@@ -89,7 +89,8 @@ resource "null_resource" "fetch_kubeconfig" {
   depends_on = [google_compute_instance.cp_node]
 
   triggers = {
-    always_run = timestamp()
+    instance_id = google_compute_instance.cp_node.id
+    instance_ip = google_compute_instance.cp_node.network_interface[0].access_config[0].nat_ip
   }
 
   provisioner "local-exec" {

@@ -201,8 +201,5 @@ curl -s -S --connect-timeout 5 "http://${endpoint}/proxy?url=https://icanhazip.c
 
 ### Next Steps
 
-* TODO figure out a way to regenerate the kubeconfig whenever the CP is recreated but not more often than that
 * TODO combine outputs maybe so there are fewer things e.g. subnet id and name and tighten variable definition formats
 * TODO Verify cloud controller manager yaml needs the subnet if an ILB has the subnet defined the right way with the short name not id.
-* TODO have our python workload handle a missing URI and default to the same thing as /
-* TODO have the proxy pod chattier in the log
