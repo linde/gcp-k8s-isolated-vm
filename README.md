@@ -203,3 +203,8 @@ curl -s -S --connect-timeout 5 "http://${endpoint}/proxy?url=https://icanhazip.c
 
 * TODO combine outputs maybe so there are fewer things e.g. subnet id and name and tighten variable definition formats
 * TODO Verify cloud controller manager yaml needs the subnet if an ILB has the subnet defined the right way with the short name not id.
+* TODO google_compute_firewall.allow_internal_all should maybe target the inst not the tag.
+* TODO fix firewall rule that seems to only work for the first node.
+* TODO upgrade k8s, why so old?
+* TODO clean up cp template param for proxied_vm_ips which moved to the module.
+* 
