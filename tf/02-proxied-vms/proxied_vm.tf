@@ -22,5 +22,5 @@ module "proxied_vm" {
   ssh_private_key_path = data.terraform_remote_state.base.outputs.ssh_key_path
   ssh_public_key       = data.terraform_remote_state.base.outputs.vm_ssh_public_key
   k8s_subnet_cidr      = data.terraform_remote_state.base.outputs.k8s_subnet_cidr
-} 
+}
  

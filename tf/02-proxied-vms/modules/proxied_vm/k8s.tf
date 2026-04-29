@@ -37,41 +37,15 @@ resource "kubernetes_deployment" "proxy" {
 
           command = ["/bin/sh", "-c"]
           args = [
-            <<-EOF
-            echo 1 > /proc/sys/net/ipv4/ip_forward
-            ip link del geneve0 2>/dev/null || true
-            ip link add name geneve0 type geneve id "$TUNNEL_ID" remote "$PROXIED_VM_IP"
-            ip addr add "192.168.$TUNNEL_ID.1/24" dev geneve0
-            ip link set geneve0 up                       
-
-            iptables -t nat -A PREROUTING -i eth0 -p tcp -j DNAT --to-destination "$VM_TUNNEL_IP"
-            iptables -t nat -A POSTROUTING -p tcp -d "$VM_TUNNEL_IP" -j MASQUERADE
-            iptables -t nat -A POSTROUTING -s 192.168.$TUNNEL_ID.0/24 -o eth0 -j MASQUERADE
-            
-            sleep infinity
-            EOF
+            templatefile("${path.module}/templates/proxy_startup.sh.tftpl", {
+              tunnel_id      = var.tunnel_id
+              proxied_vm_ip  = google_compute_address.static_ip.address
+              vm_tunnel_ip   = local.vm_tunnel_ip
+            })
           ]
 
           security_context {
             privileged = true
-          }
-
-          env {
-            name  = "PROXIED_VM_IP"
-            value = google_compute_address.static_ip.address
-          }
-
-          env {
-            name  = "TUNNEL_ID"
-            value = var.tunnel_id
-          }
-          env {
-            name  = "VM_TUNNEL_IP"
-            value = local.vm_tunnel_ip
-          }        
-          env {
-            name  = "WORKER_NODE_IP"
-            value = var.worker_node_ip
           }
 
           dynamic "port" {

@@ -1,0 +1,25 @@
+#!/bin/sh
+echo "Starting proxy setup..."
+
+echo "Enabling IP forwarding..."
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+echo "Cleaning up existing geneve0 link if any..."
+ip link del geneve0 2>/dev/null || true
+
+echo "Creating geneve0 link (ID: ${tunnel_id}, Remote: ${proxied_vm_ip})..."
+ip link add name geneve0 type geneve id "${tunnel_id}" remote "${proxied_vm_ip}"
+
+echo "Assigning IP 192.168.${tunnel_id}.1/24 to geneve0..."
+ip addr add "192.168.${tunnel_id}.1/24" dev geneve0
+
+echo "Bringing geneve0 up..."
+ip link set geneve0 up                       
+
+echo "Setting up iptables rules for DNAT and MASQUERADE..."
+iptables -t nat -A PREROUTING -i eth0 -p tcp -j DNAT --to-destination "${vm_tunnel_ip}"
+iptables -t nat -A POSTROUTING -p tcp -d "${vm_tunnel_ip}" -j MASQUERADE
+iptables -t nat -A POSTROUTING -s 192.168.${tunnel_id}.0/24 -o eth0 -j MASQUERADE
+
+echo "Proxy setup complete. Sleeping infinity."
+sleep infinity
