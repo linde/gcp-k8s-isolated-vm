@@ -197,9 +197,26 @@ curl -s -S --connect-timeout 5 "http://${endpoint}/proxy" | jq .
 # you can also pass in a different target via the url param
 curl -s -S --connect-timeout 5 "http://${endpoint}/proxy?url=https://icanhazip.com" | jq .
 
+### 4. Verify Direct Runner Transit (Via Local Workstation)
+
+To trace packets directly from your workstation using the project keys and SSH Agent Forwarding:
+
+```bash
+cd ../01-base-cluster
+
+# Initialize the SSH Agent and load your generated VM deployment key
+eval "$(ssh-agent -s)"
+ssh-add .tmp/vm_key
+
+# Extract the required external Control Plane and internal Runner IPs
+export CP_IP=$(terraform output -raw control_plane_public_ip)
+export RUNNER_IP=$(kubectl get pod -l app=httpbin1-c895b0c0 -o jsonpath='{.items[0].status.hostIP}') # dynamically fetch host node IP
+
+# Execute the chained SSH traceroute, parsing the main ingress hops
+ssh -J admin@${CP_IP} admin@${RUNNER_IP} "sudo traceroute -m 10 google.com" | head -n 5
 ```
 
-### Next Steps
+## Next Steps
 
 * TODO combine outputs maybe so there are fewer things e.g. subnet id and name and tighten variable definition formats
 * TODO Verify cloud controller manager yaml needs the subnet if an ILB has the subnet defined the right way with the short name not id.
