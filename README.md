@@ -197,7 +197,9 @@ curl -s -S --connect-timeout 5 "http://${endpoint}/proxy" | jq .
 # you can also pass in a different target via the url param
 curl -s -S --connect-timeout 5 "http://${endpoint}/proxy?url=https://icanhazip.com" | jq .
 
-One of the key features here is the isolation of the proxied VMs from the public internet. It is only accessible via pod ingress and egress is strictly limited to flow through the tunnel. You can see this directly, by using ssh forwarding to get to the runner node and then tracerouting google.com. You will see that the traffic is routed through the tunnel to the runner node and then out to the internet.  
+```
+
+One of the key features here is the isolation of the proxied VMs from the public internet. It is only accessible via pod ingress and egress is strictly limited to flow through the tunnel. You can see this directly, by using ssh forwarding to get to the runner node and then tracerouting a public domain likeg `google.com`. It's output should show that traffic is routed through the tunnel to the runner node and then out to the internet.  
 
 ```bash
 cd ../01-base-cluster
@@ -208,14 +210,13 @@ ssh-add .tmp/vm_key
 
 # Extract the required external Control Plane and internal proximal Proxied VM IPs
 export CP_IP=$(terraform output -raw control_plane_public_ip)
-export RUNNER_IP=$(gcloud compute instances list --filter="name~httpbin1" --format="value(INTERNAL_IP)")
-
+export GCP_PROJECT=$(terraform output -raw gcp_project)
+export RUNNER_IP=$(gcloud compute instances list --filter="name~httpbin1" --format="value(INTERNAL_IP)" --project=${GCP_PROJECT})
 
 # Execute the chained SSH traceroute, parsing the main ingress hops
 ssh -J admin@${CP_IP} admin@${RUNNER_IP} "sudo traceroute -m 10 google.com" | head -n 5
 ```
-You should see output like the following:
-
+This will output something like the following:
 ```
 $ ssh -J admin@${CP_IP} admin@${RUNNER_IP} "sudo traceroute -m 10 google.com" | head -n 5
 traceroute to google.com (192.178.210.138), 10 hops max, 60 byte packets
@@ -231,7 +232,6 @@ You should observe output confirming `192.168.100.1` (the remote inner tunnel in
 * TODO combine outputs maybe so there are fewer things e.g. subnet id and name and tighten variable definition formats
 * TODO Verify cloud controller manager yaml needs the subnet if an ILB has the subnet defined the right way with the short name not id.
 * TODO google_compute_firewall.allow_internal_all should maybe target the inst not the tag.
-* TODO fix firewall rule that seems to only work for the first node.
 * TODO upgrade k8s, why so old?
 * TODO clean up cp template param for proxied_vm_ips which moved to the module.
-* 
+ 
