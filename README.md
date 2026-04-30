@@ -210,8 +210,8 @@ ssh-add .tmp/vm_key
 export CP_IP=$(terraform output -raw control_plane_public_ip)
 export RUNNER_IP=$(kubectl get pod -l app=httpbin1-c895b0c0 -o jsonpath='{.items[0].status.hostIP}')
 
-# also get the tunnel endpoint IP
-export TUNNEL_IP=$(kubectl get svc -l app=httpbin1-c895b0c0 -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')
+# also get the tunnel endpoint IP (extracted via name match)
+export TUNNEL_IP=$(kubectl get svc -o json | jq -r '.items[] | select(.metadata.name | endswith("-tunnel-svc")).status.loadBalancer.ingress[0].ip' | head -n 1)
 
 # Execute the chained SSH traceroute, parsing the main ingress hops
 ssh -J admin@${CP_IP} admin@${RUNNER_IP} "sudo traceroute -m 10 google.com" | head -n 5
