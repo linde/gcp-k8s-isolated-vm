@@ -232,6 +232,5 @@ You should observe output confirming `192.168.100.1` (the remote inner tunnel in
 * TODO combine outputs maybe so there are fewer things e.g. subnet id and name and tighten variable definition formats
 * TODO Verify cloud controller manager yaml needs the subnet if an ILB has the subnet defined the right way with the short name not id.
 * TODO google_compute_firewall.allow_internal_all should maybe target the inst not the tag.
-* TODO upgrade k8s, why so old?
 * TODO clean up cp template param for proxied_vm_ips which moved to the module.
  

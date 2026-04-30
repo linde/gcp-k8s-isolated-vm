@@ -24,7 +24,7 @@ variable "k8s_subnet_cidr" {
 variable "k8s_version" {
   description = "The version of Kubernetes to install (e.g., 1.32, 1.34)."
   type        = string
-  default     = "1.32"
+  default     = "1.36"
 }
 
 variable "machine_type" {
