@@ -58,13 +58,6 @@ resource "google_compute_firewall" "allow_management" {
   source_ranges = ["0.0.0.0/0"]
 }
 
-# Route Pod CIDR via the worker node so the Proxied VM can address the Proxy Pod directly
-resource "google_compute_route" "pod_cidr_route" {
-  name              = "pod-cidr-${local.rand_suffix}"
-  network           = google_compute_network.k8s.id
-  dest_range        = var.k8s_pod_cidr
-  next_hop_instance = google_compute_instance.worker_node[0].self_link
-  priority          = 1000
-}
+
 
 
