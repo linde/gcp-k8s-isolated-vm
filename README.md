@@ -197,9 +197,7 @@ curl -s -S --connect-timeout 5 "http://${endpoint}/proxy" | jq .
 # you can also pass in a different target via the url param
 curl -s -S --connect-timeout 5 "http://${endpoint}/proxy?url=https://icanhazip.com" | jq .
 
-### 4. Verify Direct Runner Transit (Via Local Workstation)
-
-To trace packets directly from your workstation using the project keys and SSH Agent Forwarding:
+One of the key features here is the isolation of the proxied VMs from the public internet. It is only accessible via pod ingress and egress is strictly limited to flow through the tunnel. You can see this directly, by using ssh forwarding to get to the runner node and then tracerouting google.com. You will see that the traffic is routed through the tunnel to the runner node and then out to the internet.  
 
 ```bash
 cd ../01-base-cluster
@@ -210,11 +208,31 @@ ssh-add .tmp/vm_key
 
 # Extract the required external Control Plane and internal Runner IPs
 export CP_IP=$(terraform output -raw control_plane_public_ip)
-export RUNNER_IP=$(kubectl get pod -l app=httpbin1-c895b0c0 -o jsonpath='{.items[0].status.hostIP}') # dynamically fetch host node IP
+export RUNNER_IP=$(kubectl get pod -l app=httpbin1-c895b0c0 -o jsonpath='{.items[0].status.hostIP}')
+
+# also get the tunnel endpoint IP
+export TUNNEL_IP=$(kubectl get svc -l app=httpbin1-c895b0c0 -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')
 
 # Execute the chained SSH traceroute, parsing the main ingress hops
 ssh -J admin@${CP_IP} admin@${RUNNER_IP} "sudo traceroute -m 10 google.com" | head -n 5
 ```
+You should see output like the following:
+
+```
+$ ssh -J  admin@${CP_IP} admin@${RUNNER_IP} "sudo traceroute -m 10 google.com" | head -n 5
+traceroute to google.com (142.251.184.102), 30 hops max, 60 byte packets
+ 1  _gateway (192.168.100.1)  3.116 ms  2.958 ms  1.980 ms
+ 2  node-1-c895b0c0.us-central1-a.c.stevenlinde-tf-cloudk8s-116.internal (10.0.0.3)  1.993 ms  1.971 ms  1.951 ms
+ 3  * 192.178.96.119 (192.178.96.119)  3.343 ms *
+ 4  192.178.87.227 (192.178.87.227)  3.700 ms 142.250.231.94 (142.250.231.94)  4.063 ms 72.14.235.12 (72.14.235.12)  3.595 ms
+ 5  142.251.225.115 (142.251.225.115)  2.731 ms 142.251.233.250 (142.251.233.250)  2.425 ms *
+ 6  192.178.96.101 (192.178.96.101)  20.809 ms 216.239.59.199 (216.239.59.199)  4.035 ms 192.178.96.103 (192.178.96.103)  2.729 ms
+ 7  209.85.248.135 (209.85.248.135)  1.973 ms 192.178.96.175 (192.178.96.175)  2.399 ms 192.178.87.219 (192.178.87.219)  2.256 ms
+ 8  * * *
+ 9  * * *
+ ```
+You should see your `$TUNNEL_IP` value showing up as the first hop in the traceroute. 
+
 
 ## Next Steps
 
