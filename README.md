@@ -208,11 +208,8 @@ ssh-add .tmp/vm_key
 
 # Extract the required external Control Plane and internal proximal Proxied VM IPs
 export CP_IP=$(terraform output -raw control_plane_public_ip)
-export RUNNER_IP=$(gcloud compute instances describe httpbin1-$(terraform output -raw rand_suffix) --project=$(terraform output -raw gcp_project) --format='get(networkInterfaces[0].networkIP)')
+export RUNNER_IP=$(gcloud compute instances list --filter="name~httpbin1" --format="value(INTERNAL_IP)")
 
-# also get the tunnel endpoint IP (extracted via name match)
-export TUNNEL_IP=$(kubectl get svc -o json | 
-    jq -r '.items[] | select(.metadata.name | endswith("-tunnel-svc")).status.loadBalancer.ingress[0].ip' | head -n 1)
 
 # Execute the chained SSH traceroute, parsing the main ingress hops
 ssh -J admin@${CP_IP} admin@${RUNNER_IP} "sudo traceroute -m 10 google.com" | head -n 5
@@ -220,17 +217,12 @@ ssh -J admin@${CP_IP} admin@${RUNNER_IP} "sudo traceroute -m 10 google.com" | he
 You should see output like the following:
 
 ```
-$ ssh -J  admin@${CP_IP} admin@${RUNNER_IP} "sudo traceroute -m 10 google.com" | head -n 5
-traceroute to google.com (142.251.184.102), 30 hops max, 60 byte packets
- 1  _gateway (192.168.100.1)  3.116 ms  2.958 ms  1.980 ms
- 2  node-1-c895b0c0.us-central1-a.c.stevenlinde-tf-cloudk8s-116.internal (10.0.0.3)  1.993 ms  1.971 ms  1.951 ms
- 3  * 192.178.96.119 (192.178.96.119)  3.343 ms *
- 4  192.178.87.227 (192.178.87.227)  3.700 ms 142.250.231.94 (142.250.231.94)  4.063 ms 72.14.235.12 (72.14.235.12)  3.595 ms
- 5  142.251.225.115 (142.251.225.115)  2.731 ms 142.251.233.250 (142.251.233.250)  2.425 ms *
- 6  192.178.96.101 (192.178.96.101)  20.809 ms 216.239.59.199 (216.239.59.199)  4.035 ms 192.178.96.103 (192.178.96.103)  2.729 ms
- 7  209.85.248.135 (209.85.248.135)  1.973 ms 192.178.96.175 (192.178.96.175)  2.399 ms 192.178.87.219 (192.178.87.219)  2.256 ms
- 8  * * *
- 9  * * *
+$ ssh -J admin@${CP_IP} admin@${RUNNER_IP} "sudo traceroute -m 10 google.com" | head -n 5
+traceroute to google.com (192.178.210.138), 10 hops max, 60 byte packets
+ 1  _gateway (192.168.100.1)  1.670 ms  1.620 ms  1.598 ms
+ 2  node-1-c895b0c0.us-central1-a.c.stevenlinde-tf-cloudk8s-116.internal (10.0.0.3)  1.578 ms  1.558 ms  1.540 ms
+ 3  * * *
+ 4  142.250.231.94 (142.250.231.94)  1.921 ms 142.250.232.50 (142.250.232.50)  2.162 ms 142.250.232.56 (142.250.232.56)  1.497 ms 
  ```
 You should observe output confirming `192.168.100.1` (the remote inner tunnel interface inside the Proxy Pod) as your very first hop. Note that the `$TUNNEL_IP` (`10.0.0.6`) serves as the outer VPC encapsulation endpoint and remains invisible to internal ICMP/TTL traceroute packets.
 
