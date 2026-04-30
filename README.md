@@ -232,8 +232,7 @@ traceroute to google.com (142.251.184.102), 30 hops max, 60 byte packets
  8  * * *
  9  * * *
  ```
-You should see your `$TUNNEL_IP` value showing up as the first hop in the traceroute. 
-
+You should observe output confirming `192.168.100.1` (the remote inner tunnel interface inside the Proxy Pod) as your very first hop. Note that the `$TUNNEL_IP` (`10.0.0.6`) serves as the outer VPC encapsulation endpoint and remains invisible to internal ICMP/TTL traceroute packets.
 
 ## Next Steps
 
